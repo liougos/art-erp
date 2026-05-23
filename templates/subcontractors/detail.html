@@ -17,15 +17,16 @@
     <a href="{{ url_for('subcontractors.sub_documents', id=sub.id) }}"
        class="btn btn-outline-warning btn-sm position-relative">
       <i class="bi bi-folder-fill me-1"></i>Δικαιολογητικά
-      {% set doc_count = sub.documents.filter_by().count() %}
-      {% set exp_count = sub.documents.all() | selectattr('expiry_status', 'in', ['expired','expiring']) | list | length %}
+      {% set all_docs = sub.documents.all() %}
+      {% set exp_count = all_docs | selectattr('expiry_status', 'equalto', 'expired') | list | length
+                       + all_docs | selectattr('expiry_status', 'equalto', 'expiring') | list | length %}
       {% if exp_count > 0 %}
       <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:9px">
         {{ exp_count }}
       </span>
-      {% elif doc_count > 0 %}
+      {% elif all_docs %}
       <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-secondary" style="font-size:9px">
-        {{ doc_count }}
+        {{ all_docs | length }}
       </span>
       {% endif %}
     </a>
