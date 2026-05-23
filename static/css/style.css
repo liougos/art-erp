@@ -719,6 +719,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   color: #fff;
 }
 .card-dark .card-body { color: #fff; }
+.card-dark .text-muted { color: #adb5bd !important; }
 
 /* Stat summary card */
 .stat-card {
