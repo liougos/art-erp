@@ -83,12 +83,35 @@ def detail(id):
     if current_user.role not in ('admin', 'manager'):
         flash('Δεν έχετε πρόσβαση.', 'danger')
         return redirect(url_for('dashboard.index'))
-    sub = Subcontractor.query.get_or_404(id)
+    sub       = Subcontractor.query.get_or_404(id)
     contracts = sub.contracts.order_by(SubcontractorContract.created_at.desc()).all()
     projects  = Project.query.filter(Project.status.in_(['active', 'planning'])).order_by(Project.code).all()
+
+    # Recent work logs — computed in Python (avoids Jinja2 string order_by issues)
+    all_logs = []
+    for c in contracts:
+        logs = SubcontractorWorkLog.query.filter_by(contract_id=c.id)\
+               .order_by(SubcontractorWorkLog.log_date.desc()).limit(5).all()
+        all_logs.extend(logs)
+    all_logs = sorted(all_logs, key=lambda x: (x.log_date or date.min), reverse=True)[:10]
+
+    # Pending measurements count per contract
+    meas_pending = {
+        c.id: SubcontractorMeasurement.query.filter_by(contract_id=c.id, status='pending').count()
+        for c in contracts
+    }
+
+    # Documents summary
+    all_docs = sub.documents.all()
+    docs_expired  = sum(1 for d in all_docs if d.expiry_status == 'expired')
+    docs_expiring = sum(1 for d in all_docs if d.expiry_status == 'expiring')
+    docs_alert = docs_expired + docs_expiring
+
     return render_template('subcontractors/detail.html',
                            sub=sub, contracts=contracts, projects=projects,
-                           specialties=SPECIALTIES, today=date.today())
+                           specialties=SPECIALTIES, today=date.today(),
+                           all_logs=all_logs, meas_pending=meas_pending,
+                           docs_alert=docs_alert, docs_count=len(all_docs))
 
 
 @subcontractors_bp.route('/<int:id>/edit', methods=['POST'])

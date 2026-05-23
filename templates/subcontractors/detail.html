@@ -17,17 +17,10 @@
     <a href="{{ url_for('subcontractors.sub_documents', id=sub.id) }}"
        class="btn btn-outline-warning btn-sm position-relative">
       <i class="bi bi-folder-fill me-1"></i>Δικαιολογητικά
-      {% set all_docs = sub.documents.all() %}
-      {% set exp_count = all_docs | selectattr('expiry_status', 'equalto', 'expired') | list | length
-                       + all_docs | selectattr('expiry_status', 'equalto', 'expiring') | list | length %}
-      {% if exp_count > 0 %}
-      <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:9px">
-        {{ exp_count }}
-      </span>
-      {% elif all_docs %}
-      <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-secondary" style="font-size:9px">
-        {{ all_docs | length }}
-      </span>
+      {% if docs_alert > 0 %}
+      <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:9px">{{ docs_alert }}</span>
+      {% elif docs_count > 0 %}
+      <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-secondary" style="font-size:9px">{{ docs_count }}</span>
       {% endif %}
     </a>
     <button class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#modalShareDoc">
@@ -71,8 +64,7 @@
                     <a href="{{ url_for('subcontractors.measurements', cid=c.id) }}"
                        class="btn btn-outline-warning" title="Επιμετρήσεις">
                       <i class="bi bi-rulers"></i>
-                      {% set pm = c.measurements.filter_by(status='pending').count() %}
-                      {% if pm %}<span class="badge bg-danger ms-1">{{ pm }}</span>{% endif %}
+                      {% if meas_pending.get(c.id) %}<span class="badge bg-danger ms-1">{{ meas_pending[c.id] }}</span>{% endif %}
                     </a>
                     <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalInvoice{{ c.id }}" title="Τιμολόγιο">
                       <i class="bi bi-receipt"></i>
@@ -133,9 +125,7 @@
           <table class="table table-dark table-sm mb-0">
             <thead><tr><th>Ημ/νία</th><th>Σύμβαση</th><th>Περιγραφή</th><th class="text-end">Εργ.</th><th class="text-end">Ώρες</th><th class="text-end">%</th><th>Κατ.</th></tr></thead>
             <tbody>
-              {% set all_logs = [] %}
-              {% for c in contracts %}{% for log in c.work_logs.order_by('log_date desc').limit(5).all() %}{% if all_logs.append(log) %}{% endif %}{% endfor %}{% endfor %}
-              {% for log in all_logs|sort(attribute='log_date', reverse=True)|list[:10] %}
+              {% for log in all_logs %}
               <tr>
                 <td class="small">{{ log.log_date.strftime('%d/%m/%Y') }}</td>
                 <td class="small text-muted">{{ log.contract.title[:25] if log.contract else '—' }}</td>
