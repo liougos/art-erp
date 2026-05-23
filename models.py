@@ -1355,6 +1355,195 @@ class SubcontractorInvoice(db.Model):
         return {'pending':'Εκκρεμεί','approved':'Εγκρίθηκε','paid':'Πληρώθηκε'}.get(self.status, self.status)
 
 
+# ── ΔΙΚΑΙΟΛΟΓΗΤΙΚΑ ΥΠΕΡΓΟΛΑΒΟΥ ───────────────────────────────────────────────
+class SubcontractorDocument(db.Model):
+    """Δικαιολογητικά εταιρείας υπεργολάβου (ασφάλεια, άδειες, φορολογική ενημερότητα κλπ)."""
+    __tablename__ = 'subcontractor_documents'
+
+    DOC_TYPES = [
+        ('insurance',        'Ασφαλιστήριο Συμβόλαιο'),
+        ('tax_clearance',    'Φορολογική Ενημερότητα'),
+        ('asep_clearance',   'Ασφαλιστική Ενημερότητα (ΕΦΚΑ)'),
+        ('professional_license', 'Άδεια Επαγγέλματος Εταιρείας'),
+        ('company_statute',  'Καταστατικό / ΦΕΚ'),
+        ('iso_cert',         'Πιστοποίηση ISO / Ποιότητας'),
+        ('other',            'Άλλο Δικαιολογητικό'),
+    ]
+
+    id               = db.Column(db.Integer, primary_key=True)
+    subcontractor_id = db.Column(db.Integer, db.ForeignKey('subcontractors.id'), nullable=False)
+    doc_type         = db.Column(db.String(50), nullable=False, default='other')
+    title            = db.Column(db.String(300), nullable=False)
+    file_path        = db.Column(db.String(600))
+    file_name        = db.Column(db.String(300))
+    issue_date       = db.Column(db.Date)
+    expiry_date      = db.Column(db.Date)
+    notes            = db.Column(db.String(500))
+    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
+
+    subcontractor = db.relationship('Subcontractor',
+                                    backref=db.backref('documents', lazy='dynamic',
+                                                       order_by='SubcontractorDocument.expiry_date'))
+
+    @property
+    def doc_type_label(self):
+        return dict(self.DOC_TYPES).get(self.doc_type, self.doc_type)
+
+    @property
+    def days_to_expiry(self):
+        if not self.expiry_date:
+            return None
+        return (self.expiry_date - date.today()).days
+
+    @property
+    def expiry_status(self):
+        d = self.days_to_expiry
+        if d is None:    return 'none'
+        if d < 0:        return 'expired'
+        if d <= 30:      return 'expiring'
+        return 'valid'
+
+    @property
+    def expiry_color(self):
+        return {'expired': 'danger', 'expiring': 'warning', 'valid': 'success', 'none': 'secondary'}.get(self.expiry_status, 'secondary')
+
+    @property
+    def expiry_label(self):
+        d = self.days_to_expiry
+        if d is None:  return '—'
+        if d < 0:      return f'Έληξε {abs(d)} ημ. πριν'
+        if d == 0:     return 'Λήγει ΣΗΜΕΡΑ'
+        if d <= 30:    return f'Λήγει σε {d} ημ.'
+        return self.expiry_date.strftime('%d/%m/%Y')
+
+
+# ── ΠΡΟΣΩΠΙΚΟ ΥΠΕΡΓΟΛΑΒΟΥ ────────────────────────────────────────────────────
+class SubcontractorPersonnel(db.Model):
+    """Εργαζόμενοι/τεχνίτες που δηλώνει ο υπεργολάβος μέσω portal."""
+    __tablename__ = 'subcontractor_personnel'
+
+    ROLES = [
+        ('supervisor',     'Επιστάτης / Υπεύθυνος Έργου'),
+        ('conservator',    'Συντηρητής'),
+        ('technician',     'Τεχνίτης'),
+        ('electrician',    'Ηλεκτρολόγος'),
+        ('laborer',        'Εργάτης'),
+        ('driver',         'Οδηγός'),
+        ('other',          'Άλλο'),
+    ]
+
+    id               = db.Column(db.Integer, primary_key=True)
+    subcontractor_id = db.Column(db.Integer, db.ForeignKey('subcontractors.id'), nullable=False)
+    full_name        = db.Column(db.String(200), nullable=False)
+    role             = db.Column(db.String(50), default='technician')
+    license_type     = db.Column(db.String(200))   # π.χ. "Άδεια Α' τάξης Συντηρητή"
+    license_number   = db.Column(db.String(100))
+    license_expiry   = db.Column(db.Date)
+    license_file_path = db.Column(db.String(600))
+    is_active        = db.Column(db.Boolean, default=True)
+    notes            = db.Column(db.String(500))
+    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
+
+    subcontractor = db.relationship('Subcontractor',
+                                    backref=db.backref('personnel', lazy='dynamic',
+                                                       order_by='SubcontractorPersonnel.full_name'))
+
+    @property
+    def role_label(self):
+        return dict(self.ROLES).get(self.role, self.role)
+
+    @property
+    def license_days_to_expiry(self):
+        if not self.license_expiry: return None
+        return (self.license_expiry - date.today()).days
+
+    @property
+    def license_status(self):
+        d = self.license_days_to_expiry
+        if d is None: return 'none'
+        if d < 0:     return 'expired'
+        if d <= 30:   return 'expiring'
+        return 'valid'
+
+    @property
+    def license_color(self):
+        return {'expired':'danger','expiring':'warning','valid':'success','none':'secondary'}.get(self.license_status,'secondary')
+
+
+# ── ΚΟΙΝΟΧΡΗΣΤΑ ΕΓΓΡΑΦΑ ΕΡΓΟΥ (για portal υπεργολάβου) ──────────────────────
+class ProjectSharedDocument(db.Model):
+    """Έγγραφο έργου που κοινοποιεί η εταιρεία στον υπεργολάβο μέσω portal."""
+    __tablename__ = 'project_shared_documents'
+
+    id               = db.Column(db.Integer, primary_key=True)
+    project_id       = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    subcontractor_id = db.Column(db.Integer, db.ForeignKey('subcontractors.id'), nullable=False)
+    title            = db.Column(db.String(300), nullable=False)
+    description      = db.Column(db.String(500))
+    file_path        = db.Column(db.String(600))
+    file_name        = db.Column(db.String(300))
+    doc_category     = db.Column(db.String(50), default='other')
+    # study|drawing|specification|contract|permit|other
+    shared_by_id     = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
+
+    project       = db.relationship('Project', backref=db.backref('shared_documents', lazy='dynamic'))
+    subcontractor = db.relationship('Subcontractor', backref=db.backref('shared_documents', lazy='dynamic'))
+    shared_by     = db.relationship('User', foreign_keys=[shared_by_id])
+
+    @property
+    def category_label(self):
+        return {'study':'Μελέτη','drawing':'Σχέδιο','specification':'Τεχνικές Προδιαγραφές',
+                'contract':'Σύμβαση','permit':'Άδεια','other':'Άλλο'}.get(self.doc_category,'Άλλο')
+
+    @property
+    def category_icon(self):
+        return {'study':'bi-book','drawing':'bi-rulers','specification':'bi-file-text',
+                'contract':'bi-pen','permit':'bi-shield-check','other':'bi-file'}.get(self.doc_category,'bi-file')
+
+
+# ── ΕΠΙΜΕΤΡΗΣΕΙΣ ΥΠΕΡΓΟΛΑΒΟΥ ─────────────────────────────────────────────────
+class SubcontractorMeasurement(db.Model):
+    """Επιμέτρηση εργασιών — υποβάλλει ο υπεργολάβος, εγκρίνει η εταιρεία."""
+    __tablename__ = 'subcontractor_measurements'
+
+    id          = db.Column(db.Integer, primary_key=True)
+    contract_id = db.Column(db.Integer, db.ForeignKey('subcontractor_contracts.id'), nullable=False)
+    phase_id    = db.Column(db.Integer, db.ForeignKey('project_phases.id'))
+    title       = db.Column(db.String(300), nullable=False)
+    description = db.Column(db.Text)
+    quantity    = db.Column(db.Numeric(10, 3), default=0)
+    unit        = db.Column(db.String(30), default='τ.μ.')
+    unit_price  = db.Column(db.Numeric(10, 2), default=0)
+    total_amount = db.Column(db.Numeric(12, 2), default=0)
+    measurement_date = db.Column(db.Date, default=date.today)
+    status      = db.Column(db.String(20), default='pending')
+    # pending | approved | rejected | paid
+    approved_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    approved_at  = db.Column(db.DateTime)
+    rejection_reason = db.Column(db.String(500))
+    linked_invoice_id = db.Column(db.Integer, db.ForeignKey('invoices.id'))
+    file_path   = db.Column(db.String(600))   # φωτογραφίες / έγγραφο επιμέτρησης
+    notes       = db.Column(db.String(500))
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+    contract       = db.relationship('SubcontractorContract',
+                                     backref=db.backref('measurements', lazy='dynamic',
+                                                        order_by='SubcontractorMeasurement.measurement_date.desc()'))
+    phase          = db.relationship('ProjectPhase', foreign_keys=[phase_id])
+    approved_by    = db.relationship('User', foreign_keys=[approved_by_id])
+    linked_invoice = db.relationship('Invoice', foreign_keys=[linked_invoice_id])
+
+    @property
+    def status_label(self):
+        return {'pending':'Αναμονή Έγκρισης','approved':'Εγκρίθηκε',
+                'rejected':'Απορρίφθηκε','paid':'Πληρώθηκε'}.get(self.status, self.status)
+
+    @property
+    def status_color(self):
+        return {'pending':'warning','approved':'success','rejected':'danger','paid':'primary'}.get(self.status,'secondary')
+
+
 # ── ΣΚΑΛΩΣΙΕΣ ────────────────────────────────────────────────────────────────
 
 class ScaffoldingItem(db.Model):

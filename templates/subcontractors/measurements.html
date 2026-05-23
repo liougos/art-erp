@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% block title %}Επιμετρήσεις — {{ contract.title }}{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h2 class="page-title mb-0"><i class="bi bi-rulers me-2 text-warning"></i>Επιμετρήσεις</h2>
+    <div class="page-subtitle">
+      <a href="{{ url_for('subcontractors.detail', id=contract.subcontractor_id) }}"
+         class="text-warning text-decoration-none">{{ contract.subcontractor.company_name }}</a>
+      <span class="text-muted mx-1">›</span>{{ contract.title }}
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('subcontractors.detail', id=contract.subcontractor_id) }}"
+       class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Πίσω
+    </a>
+    <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#addMeasModal">
+      <i class="bi bi-plus-lg me-1"></i>Νέα Επιμέτρηση
+    </button>
+  </div>
+</div>
+
+{# ── Summary ── #}
+{% set total_approved = measurements | selectattr('status', 'equalto', 'approved') | list %}
+{% set total_pending  = measurements | selectattr('status', 'equalto', 'pending')  | list %}
+{% set total_paid     = measurements | selectattr('status', 'equalto', 'paid')     | list %}
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card card-dark text-center py-3">
+      <div class="fs-3 fw-bold text-warning">{{ measurements|length }}</div>
+      <div class="small text-muted">Σύνολο Επιμετρήσεων</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card card-dark text-center py-3">
+      <div class="fs-3 fw-bold text-warning">{{ total_pending|length }}</div>
+      <div class="small text-muted">Αναμονή Έγκρισης</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card card-dark text-center py-3">
+      <div class="fs-3 fw-bold text-success">
+        {{ '{:,.2f}'.format(total_approved | sum(attribute='total_amount') | float) }} €
+      </div>
+      <div class="small text-muted">Εγκεκριμένο Ποσό</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card card-dark text-center py-3">
+      <div class="fs-3 fw-bold text-primary">
+        {{ '{:,.2f}'.format(total_paid | sum(attribute='total_amount') | float) }} €
+      </div>
+      <div class="small text-muted">Πληρωμένο</div>
+    </div>
+  </div>
+</div>
+
+{# ── Pending alert ── #}
+{% if total_pending %}
+<div class="alert alert-warning d-flex align-items-center gap-2 mb-3">
+  <i class="bi bi-clock-fill fs-5"></i>
+  <div>
+    <strong>{{ total_pending|length }} επιμετρήσεις αναμένουν έγκρισή σας.</strong>
+    Ελέγξτε και εγκρίνετε ή απορρίψτε κάθε μία.
+  </div>
+</div>
+{% endif %}
+
+{# ── Table ── #}
+{% if measurements %}
+<div class="card card-dark">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-dark table-hover mb-0 align-middle">
+        <thead>
+          <tr class="border-secondary">
+            <th>Τίτλος / Φάση</th>
+            <th>Ημ/νία</th>
+            <th class="text-end">Ποσότητα</th>
+            <th class="text-end">Τιμή €</th>
+            <th class="text-end">Σύνολο €</th>
+            <th>Κατάσταση</th>
+            <th style="width:130px" class="text-end">Ενέργειες</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for m in measurements %}
+          <tr class="border-secondary">
+            <td>
+              <div class="fw-semibold">{{ m.title }}</div>
+              {% if m.phase %}<div class="small text-muted"><i class="bi bi-diagram-3 me-1"></i>{{ m.phase.title }}</div>{% endif %}
+              {% if m.description %}<div class="small text-muted">{{ m.description[:80] }}</div>{% endif %}
+              {% if m.notes %}<div class="small text-muted fst-italic">{{ m.notes }}</div>{% endif %}
+            </td>
+            <td class="small text-muted">{{ m.measurement_date.strftime('%d/%m/%Y') if m.measurement_date else '—' }}</td>
+            <td class="text-end small">{{ m.quantity }} {{ m.unit }}</td>
+            <td class="text-end small">{{ '{:,.2f}'.format(m.unit_price|float) }} €</td>
+            <td class="text-end fw-bold text-warning">{{ '{:,.2f}'.format(m.total_amount|float) }} €</td>
+            <td>
+              <span class="badge bg-{{ m.status_color }}">{{ m.status_label }}</span>
+              {% if m.status == 'rejected' and m.rejection_reason %}
+              <div class="small text-danger mt-1">{{ m.rejection_reason }}</div>
+              {% endif %}
+              {% if m.approved_by %}
+              <div class="small text-muted">{{ m.approved_by.full_name }}</div>
+              {% endif %}
+              {% if m.file_path %}
+              <a href="{{ url_for('static', filename='uploads/' ~ m.file_path) }}" target="_blank"
+                 class="small text-info text-decoration-none"><i class="bi bi-paperclip"></i> Αρχείο</a>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              {% if m.status == 'pending' %}
+              <form method="POST" action="{{ url_for('subcontractors.approve_measurement', mid=m.id) }}"
+                    class="d-inline">
+                <button type="submit" class="btn btn-success btn-sm" title="Έγκριση">
+                  <i class="bi bi-check-lg"></i>
+                </button>
+              </form>
+              <button class="btn btn-danger btn-sm" title="Απόρριψη"
+                      data-bs-toggle="modal" data-bs-target="#rejectModal{{ m.id }}">
+                <i class="bi bi-x-lg"></i>
+              </button>
+              {% elif m.status == 'approved' %}
+              <form method="POST" action="{{ url_for('subcontractors.approve_measurement', mid=m.id) }}"
+                    class="d-inline">
+                <button type="submit" class="btn btn-outline-primary btn-sm" title="Σήμανση Πληρωμένο"
+                        onclick="this.form.action='{{ url_for('subcontractors.approve_measurement', mid=m.id) }}'">
+                  <i class="bi bi-cash"></i>
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="border-top border-secondary">
+            <td colspan="4" class="text-end text-muted small fw-bold">Σύνολο εγκεκριμένων:</td>
+            <td class="text-end text-success fw-bold">
+              {{ '{:,.2f}'.format(total_approved | sum(attribute='total_amount') | float) }} €
+            </td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-rulers fs-1 d-block mb-3"></i>
+  Δεν υπάρχουν επιμετρήσεις για αυτή τη σύμβαση.
+</div>
+{% endif %}
+
+
+{# ── Rejection Modals ── #}
+{% for m in measurements %}
+{% if m.status == 'pending' %}
+<div class="modal fade" id="rejectModal{{ m.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title text-danger"><i class="bi bi-x-circle me-2"></i>Απόρριψη Επιμέτρησης</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('subcontractors.reject_measurement', mid=m.id) }}">
+        <div class="modal-body">
+          <p class="text-muted small">Επιμέτρηση: <strong class="text-white">{{ m.title }}</strong>
+          — {{ '{:,.2f}'.format(m.total_amount|float) }} €</p>
+          <label class="form-label">Λόγος Απόρριψης</label>
+          <textarea name="reason" class="form-control bg-dark text-white border-secondary" rows="3"
+                    placeholder="Περιγράψτε τον λόγο απόρριψης..."></textarea>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-danger">Απόρριψη</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+
+
+{# ── Add Measurement Modal ── #}
+<div class="modal fade" id="addMeasModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-rulers me-2 text-warning"></i>Νέα Επιμέτρηση</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('subcontractors.add_measurement', cid=contract.id) }}">
+        <div class="modal-body row g-3">
+          <div class="col-12">
+            <label class="form-label">Τίτλος Εργασίας *</label>
+            <input type="text" name="title" class="form-control bg-dark text-white border-secondary" required
+                   placeholder="π.χ. Καθαρισμός Ανατολικής Όψης">
+          </div>
+          {% if phases %}
+          <div class="col-md-6">
+            <label class="form-label">Φάση Έργου</label>
+            <select name="phase_id" class="form-select bg-dark text-white border-secondary">
+              <option value="">— Χωρίς φάση —</option>
+              {% for ph in phases %}
+              <option value="{{ ph.id }}">{{ ph.title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+          <div class="{{ 'col-md-6' if phases else 'col-12' }}">
+            <label class="form-label">Ημερομηνία Επιμέτρησης</label>
+            <input type="date" name="measurement_date" class="form-control bg-dark text-white border-secondary"
+                   value="{{ today }}">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Περιγραφή</label>
+            <textarea name="description" class="form-control bg-dark text-white border-secondary" rows="2"></textarea>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Ποσότητα</label>
+            <input type="number" step="0.001" name="quantity" class="form-control bg-dark text-white border-secondary"
+                   value="1" id="mQty" oninput="calcTotal()">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Μονάδα</label>
+            <input type="text" name="unit" class="form-control bg-dark text-white border-secondary" value="τ.μ.">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Τιμή Μονάδας €</label>
+            <input type="number" step="0.01" name="unit_price" class="form-control bg-dark text-white border-secondary"
+                   value="0" id="mPrice" oninput="calcTotal()">
+          </div>
+          <div class="col-12 text-end text-warning fw-bold" id="mTotal">Σύνολο: 0,00 €</div>
+          <div class="col-12">
+            <label class="form-label">Σημειώσεις</label>
+            <input type="text" name="notes" class="form-control bg-dark text-white border-secondary">
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-gold"><i class="bi bi-floppy me-1"></i>Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function calcTotal() {
+  const qty   = parseFloat(document.getElementById('mQty').value) || 0;
+  const price = parseFloat(document.getElementById('mPrice').value) || 0;
+  const total = qty * price;
+  document.getElementById('mTotal').textContent =
+    'Σύνολο: ' + total.toLocaleString('el-GR', {minimumFractionDigits:2}) + ' €';
+}
+</script>
+{% endblock %}

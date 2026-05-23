@@ -3,7 +3,10 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from datetime import datetime, date
 from werkzeug.utils import secure_filename
-from models import db, Subcontractor, SubcontractorContract, SubcontractorWorkLog, SubcontractorInvoice, Project, Employee
+from models import (db, Subcontractor, SubcontractorContract, SubcontractorWorkLog,
+                    SubcontractorInvoice, SubcontractorDocument, SubcontractorPersonnel,
+                    SubcontractorMeasurement, ProjectSharedDocument,
+                    Project, ProjectPhase, Employee, User)
 
 subcontractors_bp = Blueprint('subcontractors', __name__)
 
@@ -379,3 +382,330 @@ def portal_reports():
 
     return render_template('subcontractors/portal/reports.html',
                            sub=sub, logs=logs, today=date.today())
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ΔΙΚΑΙΟΛΟΓΗΤΙΚΑ ΥΠΕΡΓΟΛΑΒΟΥ
+# ══════════════════════════════════════════════════════════════════════════════
+
+@subcontractors_bp.route('/<int:id>/documents')
+@login_required
+def sub_documents(id):
+    if current_user.role not in ('admin', 'manager'):
+        flash('Δεν έχετε πρόσβαση.', 'danger')
+        return redirect(url_for('dashboard.index'))
+    sub  = Subcontractor.query.get_or_404(id)
+    docs = sub.documents.all()
+    expired  = [d for d in docs if d.expiry_status == 'expired']
+    expiring = [d for d in docs if d.expiry_status == 'expiring']
+    return render_template('subcontractors/documents.html',
+                           sub=sub, docs=docs, expired=expired,
+                           expiring=expiring, today=date.today(),
+                           doc_types=SubcontractorDocument.DOC_TYPES)
+
+
+@subcontractors_bp.route('/<int:id>/documents/add', methods=['POST'])
+@login_required
+def add_sub_document(id):
+    if current_user.role not in ('admin', 'manager'):
+        flash('Δεν έχετε δικαίωμα.', 'danger')
+        return redirect(url_for('subcontractors.sub_documents', id=id))
+    sub = Subcontractor.query.get_or_404(id)
+    try:
+        upload_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'sub_docs', str(id))
+        os.makedirs(upload_dir, exist_ok=True)
+        file_path = None
+        file_name = None
+        f = request.files.get('doc_file')
+        if f and f.filename:
+            fname = secure_filename(f'{datetime.now().strftime("%Y%m%d%H%M%S")}_{f.filename}')
+            f.save(os.path.join(upload_dir, fname))
+            file_path = f'sub_docs/{id}/{fname}'
+            file_name = f.filename
+
+        doc = SubcontractorDocument(
+            subcontractor_id=id,
+            doc_type=request.form.get('doc_type', 'other'),
+            title=request.form['title'].strip(),
+            file_path=file_path,
+            file_name=file_name,
+            notes=request.form.get('notes', '').strip(),
+        )
+        id_str = request.form.get('issue_date')
+        ex_str = request.form.get('expiry_date')
+        if id_str: doc.issue_date  = datetime.strptime(id_str, '%Y-%m-%d').date()
+        if ex_str: doc.expiry_date = datetime.strptime(ex_str, '%Y-%m-%d').date()
+        db.session.add(doc)
+        db.session.commit()
+        flash(f'Δικαιολογητικό "{doc.title}" προστέθηκε.', 'success')
+    except Exception as e:
+        flash(f'Σφάλμα: {e}', 'danger')
+    return redirect(url_for('subcontractors.sub_documents', id=id))
+
+
+@subcontractors_bp.route('/document/<int:doc_id>/delete', methods=['POST'])
+@login_required
+def delete_sub_document(doc_id):
+    if current_user.role not in ('admin', 'manager'):
+        flash('Δεν έχετε δικαίωμα.', 'danger')
+        return redirect(url_for('subcontractors.index'))
+    doc = SubcontractorDocument.query.get_or_404(doc_id)
+    sub_id = doc.subcontractor_id
+    db.session.delete(doc)
+    db.session.commit()
+    flash('Δικαιολογητικό διαγράφηκε.', 'success')
+    return redirect(url_for('subcontractors.sub_documents', id=sub_id))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ΕΠΙΜΕΤΡΗΣΕΙΣ
+# ══════════════════════════════════════════════════════════════════════════════
+
+@subcontractors_bp.route('/contract/<int:cid>/measurements')
+@login_required
+def measurements(cid):
+    if current_user.role not in ('admin', 'manager'):
+        flash('Δεν έχετε πρόσβαση.', 'danger')
+        return redirect(url_for('dashboard.index'))
+    c    = SubcontractorContract.query.get_or_404(cid)
+    meas = c.measurements.all()
+    phases = ProjectPhase.query.filter_by(project_id=c.project_id).all() if c.project_id else []
+    return render_template('subcontractors/measurements.html',
+                           contract=c, measurements=meas, phases=phases, today=date.today())
+
+
+@subcontractors_bp.route('/contract/<int:cid>/measurements/add', methods=['POST'])
+@login_required
+def add_measurement(cid):
+    c = SubcontractorContract.query.get_or_404(cid)
+    try:
+        qty   = float(request.form.get('quantity', 0) or 0)
+        price = float(request.form.get('unit_price', 0) or 0)
+        m = SubcontractorMeasurement(
+            contract_id=cid,
+            phase_id=request.form.get('phase_id') or None,
+            title=request.form['title'].strip(),
+            description=request.form.get('description', '').strip(),
+            quantity=qty,
+            unit=request.form.get('unit', 'τ.μ.').strip(),
+            unit_price=price,
+            total_amount=round(qty * price, 2),
+            notes=request.form.get('notes', '').strip(),
+            status='pending',
+        )
+        md = request.form.get('measurement_date')
+        if md: m.measurement_date = datetime.strptime(md, '%Y-%m-%d').date()
+        db.session.add(m)
+        db.session.commit()
+        flash(f'Επιμέτρηση "{m.title}" καταχωρήθηκε.', 'success')
+    except Exception as e:
+        flash(f'Σφάλμα: {e}', 'danger')
+    return redirect(url_for('subcontractors.measurements', cid=cid))
+
+
+@subcontractors_bp.route('/measurement/<int:mid>/approve', methods=['POST'])
+@login_required
+def approve_measurement(mid):
+    if current_user.role not in ('admin', 'manager'):
+        flash('Δεν έχετε δικαίωμα.', 'danger')
+        return redirect(url_for('subcontractors.index'))
+    m = SubcontractorMeasurement.query.get_or_404(mid)
+    m.status        = 'approved'
+    m.approved_by_id = current_user.id
+    m.approved_at   = datetime.utcnow()
+    db.session.commit()
+    flash(f'Επιμέτρηση εγκρίθηκε ({m.total_amount:.2f}€).', 'success')
+    return redirect(url_for('subcontractors.measurements', cid=m.contract_id))
+
+
+@subcontractors_bp.route('/measurement/<int:mid>/reject', methods=['POST'])
+@login_required
+def reject_measurement(mid):
+    if current_user.role not in ('admin', 'manager'):
+        flash('Δεν έχετε δικαίωμα.', 'danger')
+        return redirect(url_for('subcontractors.index'))
+    m = SubcontractorMeasurement.query.get_or_404(mid)
+    m.status           = 'rejected'
+    m.rejection_reason = request.form.get('reason', '').strip()
+    m.approved_by_id   = current_user.id
+    m.approved_at      = datetime.utcnow()
+    db.session.commit()
+    flash('Επιμέτρηση απορρίφθηκε.', 'warning')
+    return redirect(url_for('subcontractors.measurements', cid=m.contract_id))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PORTAL — ΠΡΟΣΩΠΙΚΟ & ΑΔΕΙΕΣ
+# ══════════════════════════════════════════════════════════════════════════════
+
+@subcontractors_bp.route('/portal/personnel')
+def portal_personnel():
+    sub_id = session.get('sub_portal_id')
+    if not sub_id:
+        return redirect(url_for('subcontractors.portal_login'))
+    sub       = Subcontractor.query.get_or_404(sub_id)
+    personnel = sub.personnel.all()
+    return render_template('subcontractors/portal/personnel.html',
+                           sub=sub, personnel=personnel,
+                           roles=SubcontractorPersonnel.ROLES, today=date.today())
+
+
+@subcontractors_bp.route('/portal/personnel/add', methods=['POST'])
+def portal_add_personnel():
+    sub_id = session.get('sub_portal_id')
+    if not sub_id:
+        return redirect(url_for('subcontractors.portal_login'))
+    try:
+        p = SubcontractorPersonnel(
+            subcontractor_id=sub_id,
+            full_name=request.form['full_name'].strip(),
+            role=request.form.get('role', 'technician'),
+            license_type=request.form.get('license_type', '').strip(),
+            license_number=request.form.get('license_number', '').strip(),
+            notes=request.form.get('notes', '').strip(),
+        )
+        le = request.form.get('license_expiry')
+        if le: p.license_expiry = datetime.strptime(le, '%Y-%m-%d').date()
+
+        # Upload license file
+        f = request.files.get('license_file')
+        if f and f.filename:
+            upload_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'sub_personnel', str(sub_id))
+            os.makedirs(upload_dir, exist_ok=True)
+            fname = secure_filename(f'{datetime.now().strftime("%Y%m%d%H%M%S")}_{f.filename}')
+            f.save(os.path.join(upload_dir, fname))
+            p.license_file_path = f'sub_personnel/{sub_id}/{fname}'
+
+        db.session.add(p)
+        db.session.commit()
+        flash(f'Εργαζόμενος "{p.full_name}" προστέθηκε.', 'success')
+    except Exception as e:
+        flash(f'Σφάλμα: {e}', 'danger')
+    return redirect(url_for('subcontractors.portal_personnel'))
+
+
+@subcontractors_bp.route('/portal/personnel/<int:pid>/toggle', methods=['POST'])
+def portal_toggle_personnel(pid):
+    sub_id = session.get('sub_portal_id')
+    if not sub_id:
+        return redirect(url_for('subcontractors.portal_login'))
+    p = SubcontractorPersonnel.query.get_or_404(pid)
+    if p.subcontractor_id != sub_id:
+        flash('Δεν επιτρέπεται.', 'danger')
+        return redirect(url_for('subcontractors.portal_personnel'))
+    p.is_active = not p.is_active
+    db.session.commit()
+    flash(f'{"Ενεργοποιήθηκε" if p.is_active else "Απενεργοποιήθηκε"}: {p.full_name}', 'info')
+    return redirect(url_for('subcontractors.portal_personnel'))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PORTAL — ΚΟΙΝΟΧΡΗΣΤΑ ΕΓΓΡΑΦΑ ΕΡΓΟΥ
+# ══════════════════════════════════════════════════════════════════════════════
+
+@subcontractors_bp.route('/portal/shared-docs')
+def portal_shared_docs():
+    sub_id = session.get('sub_portal_id')
+    if not sub_id:
+        return redirect(url_for('subcontractors.portal_login'))
+    sub  = Subcontractor.query.get_or_404(sub_id)
+    docs = ProjectSharedDocument.query.filter_by(subcontractor_id=sub_id).order_by(
+        ProjectSharedDocument.created_at.desc()).all()
+    return render_template('subcontractors/portal/shared_docs.html',
+                           sub=sub, docs=docs, today=date.today())
+
+
+@subcontractors_bp.route('/<int:sub_id>/share-document', methods=['POST'])
+@login_required
+def share_document(sub_id):
+    """Η εταιρεία κοινοποιεί έγγραφο έργου στον υπεργολάβο."""
+    if current_user.role not in ('admin', 'manager'):
+        flash('Δεν έχετε δικαίωμα.', 'danger')
+        return redirect(url_for('subcontractors.detail', id=sub_id))
+    try:
+        upload_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'shared_docs', str(sub_id))
+        os.makedirs(upload_dir, exist_ok=True)
+        file_path = None
+        file_name = None
+        f = request.files.get('doc_file')
+        if f and f.filename:
+            fname = secure_filename(f'{datetime.now().strftime("%Y%m%d%H%M%S")}_{f.filename}')
+            f.save(os.path.join(upload_dir, fname))
+            file_path = f'shared_docs/{sub_id}/{fname}'
+            file_name = f.filename
+
+        doc = ProjectSharedDocument(
+            project_id=int(request.form['project_id']),
+            subcontractor_id=sub_id,
+            title=request.form['title'].strip(),
+            description=request.form.get('description', '').strip(),
+            doc_category=request.form.get('doc_category', 'other'),
+            file_path=file_path,
+            file_name=file_name,
+            shared_by_id=current_user.id,
+        )
+        db.session.add(doc)
+        db.session.commit()
+        flash(f'Έγγραφο "{doc.title}" κοινοποιήθηκε.', 'success')
+    except Exception as e:
+        flash(f'Σφάλμα: {e}', 'danger')
+    return redirect(url_for('subcontractors.detail', id=sub_id))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PORTAL — ΕΠΙΜΕΤΡΗΣΕΙΣ (υποβολή από υπεργολάβο)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@subcontractors_bp.route('/portal/measurements')
+def portal_measurements():
+    sub_id = session.get('sub_portal_id')
+    if not sub_id:
+        return redirect(url_for('subcontractors.portal_login'))
+    sub = Subcontractor.query.get_or_404(sub_id)
+    contracts = sub.contracts.filter(
+        SubcontractorContract.status.in_(['signed', 'active'])
+    ).all()
+    meas = SubcontractorMeasurement.query.join(SubcontractorContract).filter(
+        SubcontractorContract.subcontractor_id == sub_id
+    ).order_by(SubcontractorMeasurement.measurement_date.desc()).all()
+    return render_template('subcontractors/portal/measurements.html',
+                           sub=sub, contracts=contracts, measurements=meas, today=date.today())
+
+
+@subcontractors_bp.route('/portal/measurements/submit', methods=['POST'])
+def portal_submit_measurement():
+    sub_id = session.get('sub_portal_id')
+    if not sub_id:
+        return redirect(url_for('subcontractors.portal_login'))
+    try:
+        qty   = float(request.form.get('quantity', 0) or 0)
+        price = float(request.form.get('unit_price', 0) or 0)
+        m = SubcontractorMeasurement(
+            contract_id=int(request.form['contract_id']),
+            title=request.form['title'].strip(),
+            description=request.form.get('description', '').strip(),
+            quantity=qty,
+            unit=request.form.get('unit', 'τ.μ.').strip(),
+            unit_price=price,
+            total_amount=round(qty * price, 2),
+            notes=request.form.get('notes', '').strip(),
+            status='pending',
+        )
+        md = request.form.get('measurement_date')
+        if md: m.measurement_date = datetime.strptime(md, '%Y-%m-%d').date()
+
+        # Upload measurement file
+        f = request.files.get('meas_file')
+        if f and f.filename:
+            upload_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'sub_measurements')
+            os.makedirs(upload_dir, exist_ok=True)
+            fname = secure_filename(f'{datetime.now().strftime("%Y%m%d%H%M%S")}_{f.filename}')
+            f.save(os.path.join(upload_dir, fname))
+            m.file_path = f'sub_measurements/{fname}'
+
+        db.session.add(m)
+        db.session.commit()
+        flash('Επιμέτρηση υποβλήθηκε για έγκριση.', 'success')
+    except Exception as e:
+        flash(f'Σφάλμα: {e}', 'danger')
+    return redirect(url_for('subcontractors.portal_measurements'))

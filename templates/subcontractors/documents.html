@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Δικαιολογητικά — {{ sub.company_name }}{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h2 class="page-title mb-0"><i class="bi bi-folder-fill me-2 text-warning"></i>{{ sub.company_name }}</h2>
+    <div class="page-subtitle">Φάκελος Δικαιολογητικών Εταιρείας</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('subcontractors.detail', id=sub.id) }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Πίσω
+    </a>
+    <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#addDocModal">
+      <i class="bi bi-plus-lg me-1"></i>Νέο Δικαιολογητικό
+    </button>
+  </div>
+</div>
+
+{# ── Alerts ── #}
+{% if expired %}
+<div class="alert alert-danger border-danger d-flex align-items-center gap-2 mb-3">
+  <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+  <div>
+    <strong>{{ expired|length }} ληγμένα δικαιολογητικά!</strong>
+    {% for d in expired %}<span class="badge bg-danger ms-1">{{ d.title }}</span>{% endfor %}
+  </div>
+</div>
+{% endif %}
+{% if expiring %}
+<div class="alert alert-warning border-warning d-flex align-items-center gap-2 mb-3">
+  <i class="bi bi-clock-fill fs-5"></i>
+  <div>
+    <strong>{{ expiring|length }} δικαιολογητικά λήγουν εντός 30 ημερών:</strong>
+    {% for d in expiring %}<span class="badge bg-warning text-dark ms-1">{{ d.title }} ({{ d.expiry_label }})</span>{% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Λίστα ── #}
+{% if docs %}
+<div class="card card-dark">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-dark table-hover mb-0 align-middle">
+        <thead>
+          <tr class="border-secondary">
+            <th>Τύπος</th>
+            <th>Τίτλος</th>
+            <th>Έκδοση</th>
+            <th>Λήξη</th>
+            <th>Κατάσταση</th>
+            <th style="width:110px" class="text-end">Ενέργειες</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for doc in docs %}
+          <tr class="border-secondary">
+            <td><span class="badge bg-secondary">{{ doc.doc_type_label }}</span></td>
+            <td>
+              {{ doc.title }}
+              {% if doc.notes %}<br><small class="text-muted">{{ doc.notes }}</small>{% endif %}
+            </td>
+            <td class="small text-muted">{{ doc.issue_date.strftime('%d/%m/%Y') if doc.issue_date else '—' }}</td>
+            <td class="small">
+              {% if doc.expiry_date %}
+                <span class="text-{{ doc.expiry_color }}">{{ doc.expiry_label }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              <span class="badge bg-{{ doc.expiry_color }}">
+                {% if doc.expiry_status == 'expired' %}<i class="bi bi-x-circle me-1"></i>Ληγμένο
+                {% elif doc.expiry_status == 'expiring' %}<i class="bi bi-clock me-1"></i>Λήγει σύντομα
+                {% elif doc.expiry_status == 'valid' %}<i class="bi bi-check-circle me-1"></i>Ισχύει
+                {% else %}<i class="bi bi-dash me-1"></i>Χωρίς λήξη{% endif %}
+              </span>
+            </td>
+            <td class="text-end">
+              {% if doc.file_path %}
+              <a href="{{ url_for('static', filename='uploads/' ~ doc.file_path) }}"
+                 target="_blank" class="btn btn-outline-primary btn-sm" title="Προβολή">
+                <i class="bi bi-eye"></i>
+              </a>
+              {% endif %}
+              <form method="POST" action="{{ url_for('subcontractors.delete_sub_document', doc_id=doc.id) }}"
+                    class="d-inline" onsubmit="return confirm('Διαγραφή δικαιολογητικού;')">
+                <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-folder2-open fs-1 d-block mb-3"></i>
+  Δεν υπάρχουν δικαιολογητικά. Προσθέστε το πρώτο.
+</div>
+{% endif %}
+
+
+{# ── Modal: Νέο δικαιολογητικό ── #}
+<div class="modal fade" id="addDocModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-file-earmark-plus me-2 text-warning"></i>Νέο Δικαιολογητικό</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('subcontractors.add_sub_document', id=sub.id) }}"
+            enctype="multipart/form-data">
+        <div class="modal-body row g-3">
+          <div class="col-12">
+            <label class="form-label">Τύπος Δικαιολογητικού</label>
+            <select name="doc_type" class="form-select bg-dark text-white border-secondary">
+              {% for val, lbl in doc_types %}
+              <option value="{{ val }}">{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Τίτλος *</label>
+            <input type="text" name="title" class="form-control bg-dark text-white border-secondary"
+                   placeholder="π.χ. Ασφαλιστική Ενημερότητα ΕΦΚΑ 2026" required>
+          </div>
+          <div class="col-6">
+            <label class="form-label">Ημ. Έκδοσης</label>
+            <input type="date" name="issue_date" class="form-control bg-dark text-white border-secondary">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Ημ. Λήξης</label>
+            <input type="date" name="expiry_date" class="form-control bg-dark text-white border-secondary">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Αρχείο (PDF / εικόνα)</label>
+            <input type="file" name="doc_file" accept=".pdf,.jpg,.jpeg,.png"
+                   class="form-control bg-dark text-white border-secondary">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Σημειώσεις</label>
+            <input type="text" name="notes" class="form-control bg-dark text-white border-secondary">
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Ακύρωση</button>
+          <button type="submit" class="btn btn-gold"><i class="bi bi-floppy me-1"></i>Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

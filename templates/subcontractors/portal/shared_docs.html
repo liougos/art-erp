@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Έγγραφα Έργου — {{ sub.company_name }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+  <style>
+    body { background:#111; color:#fff; }
+    .portal-header { background:#1a1a1a; border-bottom:1px solid #333; padding:1rem 1.5rem; }
+    .brand-gold { color:#c9a84c; }
+    .btn-gold { background:#c9a84c; color:#111; border:none; font-weight:600; }
+    .btn-gold:hover { background:#b8973e; color:#111; }
+    .doc-card {
+      background:#1a1a1a; border:1px solid #2a2a2a; border-radius:10px;
+      padding:1.2rem; transition: border-color .2s;
+    }
+    .doc-card:hover { border-color:#c9a84c; }
+    .doc-icon { font-size:2.5rem; }
+  </style>
+</head>
+<body>
+
+<div class="portal-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <span class="brand-gold fw-bold"><i class="bi bi-folder-fill me-2"></i>Έγγραφα Έργου</span>
+    <span class="text-muted ms-2 small">| {{ sub.company_name }}</span>
+  </div>
+  <a href="{{ url_for('subcontractors.portal_dashboard') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Dashboard
+  </a>
+</div>
+
+<div class="container-fluid py-4 px-4">
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ 'danger' if cat in ('danger','error') else cat }} alert-dismissible mb-3">
+    {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+  {% endwith %}
+
+  <p class="text-muted small mb-4">
+    <i class="bi bi-info-circle me-1"></i>
+    Εδώ εμφανίζονται τα έγγραφα έργου (μελέτες, σχέδια, προδιαγραφές) που σας έχει κοινοποιήσει η εταιρεία.
+  </p>
+
+  {% if docs %}
+  {# Group by project #}
+  {% set seen_projects = [] %}
+  {% for doc in docs %}
+    {% if doc.project_id not in seen_projects %}
+      {% if seen_projects.append(doc.project_id) %}{% endif %}
+    {% endif %}
+  {% endfor %}
+
+  {% for proj_id in seen_projects %}
+    {% set proj_docs = docs | selectattr('project_id', 'equalto', proj_id) | list %}
+    {% if proj_docs %}
+    <h6 class="brand-gold mb-3 mt-4">
+      <i class="bi bi-building me-2"></i>
+      Έργο: {{ proj_docs[0].project.title if proj_docs[0].project else 'Έργο #' ~ proj_id }}
+      {% if proj_docs[0].project %}
+      <span class="text-muted fw-normal small ms-2">[{{ proj_docs[0].project.code }}]</span>
+      {% endif %}
+    </h6>
+    <div class="row g-3 mb-3">
+      {% for doc in proj_docs %}
+      <div class="col-sm-6 col-lg-4">
+        <div class="doc-card h-100">
+          <div class="d-flex align-items-start gap-3">
+            <div class="doc-icon text-warning">
+              <i class="bi {{ doc.category_icon }}"></i>
+            </div>
+            <div class="flex-grow-1 min-w-0">
+              <div class="fw-semibold">{{ doc.title }}</div>
+              <span class="badge bg-secondary mb-1" style="font-size:10px">{{ doc.category_label }}</span>
+              {% if doc.description %}
+              <div class="small text-muted mt-1">{{ doc.description }}</div>
+              {% endif %}
+              <div class="small text-muted mt-2">
+                <i class="bi bi-calendar me-1"></i>
+                {{ doc.created_at.strftime('%d/%m/%Y') if doc.created_at else '—' }}
+                {% if doc.shared_by %}
+                <span class="ms-2"><i class="bi bi-person me-1"></i>{{ doc.shared_by.full_name }}</span>
+                {% endif %}
+              </div>
+              {% if doc.file_path %}
+              <a href="{{ url_for('static', filename='uploads/' ~ doc.file_path) }}"
+                 target="_blank" class="btn btn-sm btn-outline-warning mt-2">
+                <i class="bi bi-download me-1"></i>Άνοιγμα / Λήψη
+              </a>
+              {% else %}
+              <span class="small text-muted d-block mt-2"><i class="bi bi-slash-circle me-1"></i>Χωρίς αρχείο</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endfor %}
+
+  {% else %}
+  <div class="text-center text-muted py-5">
+    <i class="bi bi-folder2-open fs-1 d-block mb-3"></i>
+    Δεν σας έχουν κοινοποιηθεί έγγραφα ακόμα.<br>
+    <small>Επικοινωνήστε με την εταιρεία εάν χρειάζεστε πρόσβαση σε μελέτη ή σχέδια.</small>
+  </div>
+  {% endif %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

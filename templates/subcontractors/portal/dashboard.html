@@ -29,7 +29,16 @@
       <i class="bi bi-calendar3 me-1"></i>Χρονοδιάγραμμα
     </a>
     <a href="{{ url_for('subcontractors.portal_reports') }}" class="btn btn-sm btn-outline-info">
-      <i class="bi bi-journal-check me-1"></i>Αναφορές μου
+      <i class="bi bi-journal-check me-1"></i>Αναφορές
+    </a>
+    <a href="{{ url_for('subcontractors.portal_measurements') }}" class="btn btn-sm btn-outline-warning">
+      <i class="bi bi-rulers me-1"></i>Επιμετρήσεις
+    </a>
+    <a href="{{ url_for('subcontractors.portal_personnel') }}" class="btn btn-sm btn-outline-info">
+      <i class="bi bi-people me-1"></i>Προσωπικό
+    </a>
+    <a href="{{ url_for('subcontractors.portal_shared_docs') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-folder me-1"></i>Έγγραφα
     </a>
     <a href="{{ url_for('subcontractors.portal_invoices') }}" class="btn btn-sm btn-outline-warning">
       <i class="bi bi-receipt me-1"></i>Τιμολόγια
@@ -123,9 +132,9 @@
       </div>
     </div>
 
-    <!-- Quick info -->
+    <!-- Quick info + actions -->
     <div class="col-lg-4">
-      <div class="card" style="background:#1a1a1a;border:1px solid #2a2a2a">
+      <div class="card mb-3" style="background:#1a1a1a;border:1px solid #2a2a2a">
         <div class="card-header border-0" style="background:#1a1a1a"><h6 class="mb-0">Πληροφορίες</h6></div>
         <div class="card-body small">
           <dl class="row mb-0">
@@ -140,6 +149,30 @@
           </div>
           {% endif %}
         </div>
+      </div>
+
+      <!-- Quick action buttons -->
+      <div class="d-grid gap-2">
+        <a href="{{ url_for('subcontractors.portal_measurements') }}"
+           class="btn btn-outline-warning text-start">
+          <i class="bi bi-rulers me-2"></i>Επιμετρήσεις
+          <small class="text-muted d-block" style="font-size:11px">Υποβολή & παρακολούθηση επιμετρήσεων</small>
+        </a>
+        <a href="{{ url_for('subcontractors.portal_personnel') }}"
+           class="btn btn-outline-info text-start">
+          <i class="bi bi-people me-2"></i>Δήλωση Προσωπικού
+          <small class="text-muted d-block" style="font-size:11px">Εργαζόμενοι & άδειες επαγγέλματος</small>
+        </a>
+        <a href="{{ url_for('subcontractors.portal_shared_docs') }}"
+           class="btn btn-outline-secondary text-start">
+          <i class="bi bi-folder me-2"></i>Έγγραφα Έργου
+          <small class="text-muted d-block" style="font-size:11px">Μελέτες & σχέδια που σας κοινοποιήθηκαν</small>
+        </a>
+        <a href="{{ url_for('subcontractors.portal_invoices') }}"
+           class="btn btn-outline-secondary text-start">
+          <i class="bi bi-receipt me-2"></i>Τιμολόγιά μου
+          <small class="text-muted d-block" style="font-size:11px">Ιστορικό & κατάσταση πληρωμών</small>
+        </a>
       </div>
     </div>
   </div>

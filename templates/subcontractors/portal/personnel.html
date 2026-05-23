@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Προσωπικό — {{ sub.company_name }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+  <style>
+    body { background:#111; color:#fff; }
+    .portal-header { background:#1a1a1a; border-bottom:1px solid #333; padding:1rem 1.5rem; }
+    .brand-gold { color:#c9a84c; }
+    .btn-gold { background:#c9a84c; color:#111; border:none; font-weight:600; }
+    .btn-gold:hover { background:#b8973e; color:#111; }
+    .card-portal { background:#1a1a1a; border:1px solid #2a2a2a; border-radius:10px; }
+  </style>
+</head>
+<body>
+
+<div class="portal-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <span class="brand-gold fw-bold"><i class="bi bi-people-fill me-2"></i>Δήλωση Προσωπικού</span>
+    <span class="text-muted ms-2 small">| {{ sub.company_name }}</span>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{{ url_for('subcontractors.portal_dashboard') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Dashboard
+    </a>
+    <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#addPersonModal">
+      <i class="bi bi-person-plus me-1"></i>Προσθήκη
+    </button>
+  </div>
+</div>
+
+<div class="container-fluid py-4 px-4">
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ 'danger' if cat in ('danger','error') else cat }} alert-dismissible mb-3">
+    {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+  {% endwith %}
+
+  <p class="text-muted small mb-4">
+    <i class="bi bi-info-circle me-1"></i>
+    Δηλώστε το προσωπικό και τους τεχνίτες που συμμετέχουν στο έργο, καθώς και τις άδειες άσκησης επαγγέλματος.
+    Ο εργοδότης θα ελέγξει τις εγγραφές.
+  </p>
+
+  {# ── License expiry warnings ── #}
+  {% set expired_lic = personnel | selectattr('license_status', 'equalto', 'expired') | list %}
+  {% set expiring_lic = personnel | selectattr('license_status', 'equalto', 'expiring') | list %}
+  {% if expired_lic %}
+  <div class="alert alert-danger d-flex align-items-center gap-2 mb-3">
+    <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+    <div><strong>{{ expired_lic|length }} άδεια/ες έχουν λήξει:</strong>
+      {% for p in expired_lic %}<span class="badge bg-danger ms-1">{{ p.full_name }}</span>{% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% if expiring_lic %}
+  <div class="alert alert-warning d-flex align-items-center gap-2 mb-3">
+    <i class="bi bi-clock-fill fs-5"></i>
+    <div><strong>{{ expiring_lic|length }} άδεια/ες λήγουν εντός 30 ημερών:</strong>
+      {% for p in expiring_lic %}<span class="badge bg-warning text-dark ms-1">{{ p.full_name }}</span>{% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Personnel Table ── #}
+  {% if personnel %}
+  <div class="card-portal">
+    <div class="table-responsive">
+      <table class="table table-dark table-hover mb-0 align-middle">
+        <thead>
+          <tr class="border-secondary">
+            <th>Ονοματεπώνυμο</th>
+            <th>Ρόλος</th>
+            <th>Άδεια Επαγγέλματος</th>
+            <th>Λήξη Άδειας</th>
+            <th>Κατάσταση Άδειας</th>
+            <th style="width:100px" class="text-end">Ενέργειες</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for p in personnel %}
+          <tr class="border-secondary {{ 'opacity-50' if not p.is_active }}">
+            <td>
+              <div class="fw-semibold">{{ p.full_name }}</div>
+              {% if not p.is_active %}<small class="text-muted">Ανενεργός</small>{% endif %}
+              {% if p.notes %}<div class="small text-muted">{{ p.notes }}</div>{% endif %}
+            </td>
+            <td><span class="badge bg-secondary">{{ p.role_label }}</span></td>
+            <td>
+              <div>{{ p.license_type or '—' }}</div>
+              {% if p.license_number %}<div class="small text-muted">Αρ.: {{ p.license_number }}</div>{% endif %}
+              {% if p.license_file_path %}
+              <a href="{{ url_for('static', filename='uploads/' ~ p.license_file_path) }}"
+                 target="_blank" class="small text-info text-decoration-none">
+                <i class="bi bi-paperclip me-1"></i>Αρχείο
+              </a>
+              {% endif %}
+            </td>
+            <td class="small">
+              {% if p.license_expiry %}
+                {{ p.license_expiry.strftime('%d/%m/%Y') }}
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if p.license_type %}
+              <span class="badge bg-{{ p.license_color }}">
+                {% if p.license_status == 'expired' %}<i class="bi bi-x-circle me-1"></i>Ληγμένη
+                {% elif p.license_status == 'expiring' %}<i class="bi bi-clock me-1"></i>Λήγει σύντομα
+                {% elif p.license_status == 'valid' %}<i class="bi bi-check-circle me-1"></i>Ισχύει
+                {% else %}<i class="bi bi-dash me-1"></i>Χωρίς λήξη{% endif %}
+              </span>
+              {% else %}<span class="text-muted small">—</span>{% endif %}
+            </td>
+            <td class="text-end">
+              <form method="POST"
+                    action="{{ url_for('subcontractors.portal_toggle_personnel', pid=p.id) }}"
+                    class="d-inline">
+                <button type="submit"
+                        class="btn btn-sm {{ 'btn-outline-warning' if p.is_active else 'btn-outline-success' }}"
+                        title="{{ 'Απενεργοποίηση' if p.is_active else 'Ενεργοποίηση' }}"
+                        onclick="return confirm('{{ 'Απενεργοποίηση' if p.is_active else 'Ενεργοποίηση' }} {{ p.full_name }};')">
+                  <i class="bi bi-{{ 'pause' if p.is_active else 'play' }}"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="text-center text-muted py-5">
+    <i class="bi bi-people fs-1 d-block mb-3"></i>
+    Δεν έχετε δηλώσει ακόμα προσωπικό. Χρησιμοποιήστε το κουμπί «Προσθήκη».
+  </div>
+  {% endif %}
+</div>
+
+{# ── Add Personnel Modal ── #}
+<div class="modal fade" id="addPersonModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content" style="background:#1a1a1a;border:1px solid #333;color:#fff">
+      <div class="modal-header" style="border-color:#333">
+        <h5 class="modal-title brand-gold"><i class="bi bi-person-plus me-2"></i>Προσθήκη Εργαζομένου</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('subcontractors.portal_add_personnel') }}"
+            enctype="multipart/form-data">
+        <div class="modal-body row g-3">
+          <div class="col-md-8">
+            <label class="form-label">Ονοματεπώνυμο *</label>
+            <input type="text" name="full_name" class="form-control bg-dark text-white border-secondary"
+                   required placeholder="π.χ. Γεώργιος Παπαδόπουλος">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Ρόλος</label>
+            <select name="role" class="form-select bg-dark text-white border-secondary">
+              {% for val, lbl in roles %}
+              <option value="{{ val }}">{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Τύπος Άδειας Επαγγέλματος</label>
+            <input type="text" name="license_type" class="form-control bg-dark text-white border-secondary"
+                   placeholder="π.χ. Άδεια Α' τάξης Συντηρητή ΑΠΘ">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Αριθμός Άδειας</label>
+            <input type="text" name="license_number" class="form-control bg-dark text-white border-secondary">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Ημ. Λήξης Άδειας</label>
+            <input type="date" name="license_expiry" class="form-control bg-dark text-white border-secondary">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Αρχείο Άδειας (PDF / εικόνα)</label>
+            <input type="file" name="license_file" accept=".pdf,.jpg,.jpeg,.png"
+                   class="form-control bg-dark text-white border-secondary">
+            <div class="form-text text-muted">Ανεβάστε αντίγραφο της άδειας άσκησης επαγγέλματος.</div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Σημειώσεις</label>
+            <input type="text" name="notes" class="form-control bg-dark text-white border-secondary">
+          </div>
+        </div>
+        <div class="modal-footer" style="border-color:#333">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-gold"><i class="bi bi-floppy me-1"></i>Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
