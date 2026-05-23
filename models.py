@@ -1528,8 +1528,7 @@ class SubcontractorMeasurement(db.Model):
     created_at  = db.Column(db.DateTime, default=datetime.utcnow)
 
     contract       = db.relationship('SubcontractorContract',
-                                     backref=db.backref('measurements', lazy='dynamic',
-                                                        order_by='SubcontractorMeasurement.measurement_date.desc()'))
+                                     backref=db.backref('measurements', lazy='dynamic'))
     phase          = db.relationship('ProjectPhase', foreign_keys=[phase_id])
     approved_by    = db.relationship('User', foreign_keys=[approved_by_id])
     linked_invoice = db.relationship('Invoice', foreign_keys=[linked_invoice_id])

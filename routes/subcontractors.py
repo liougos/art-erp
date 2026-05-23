@@ -468,7 +468,7 @@ def measurements(cid):
         flash('Δεν έχετε πρόσβαση.', 'danger')
         return redirect(url_for('dashboard.index'))
     c    = SubcontractorContract.query.get_or_404(cid)
-    meas = c.measurements.all()
+    meas = c.measurements.order_by(SubcontractorMeasurement.measurement_date.desc()).all()
     phases = ProjectPhase.query.filter_by(project_id=c.project_id).all() if c.project_id else []
     return render_template('subcontractors/measurements.html',
                            contract=c, measurements=meas, phases=phases, today=date.today())
@@ -667,7 +667,7 @@ def portal_measurements():
     ).all()
     meas = SubcontractorMeasurement.query.join(SubcontractorContract).filter(
         SubcontractorContract.subcontractor_id == sub_id
-    ).order_by(SubcontractorMeasurement.measurement_date.desc()).all()
+    ).order_by(SubcontractorMeasurement.created_at.desc()).all()
     return render_template('subcontractors/portal/measurements.html',
                            sub=sub, contracts=contracts, measurements=meas, today=date.today())
 
