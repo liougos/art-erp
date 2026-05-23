@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}P&L: {{ project.code }} — ART ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('reports.index') }}">Αναφορές</a></li>
+<li class="breadcrumb-item active">[{{ project.code }}] {{ project.title[:40] }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h2 class="page-title mb-1">
+      <i class="bi bi-graph-up me-2 text-success"></i>[{{ project.code }}] {{ project.title }}
+    </h2>
+    <span class="badge bg-{{ 'success' if project.status=='completed' else 'warning text-dark' }}">{{ project.status }}</span>
+  </div>
+  <a href="{{ url_for('reports.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Αναφορές
+  </a>
+</div>
+
+<!-- Summary cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-label">Συμβατική Αξία</div>
+      <div class="stat-value text-warning">{{ '{:,.0f}'.format(pl.contract_value) }} €</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-label">Έσοδα (τιμολόγια)</div>
+      <div class="stat-value text-success">{{ '{:,.0f}'.format(pl.revenue) }} €</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-label">Συνολικά Έξοδα</div>
+      <div class="stat-value text-danger">{{ '{:,.0f}'.format(pl.total_cost) }} €</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-label">Μικτό Κέρδος</div>
+      <div class="stat-value {{ 'text-success' if pl.gross_profit >= 0 else 'text-danger' }}">
+        {{ '{:,.0f}'.format(pl.gross_profit) }} €
+      </div>
+      <div class="stat-label">Περιθώριο: {{ pl.margin_pct }}%</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Cost breakdown -->
+  <div class="col-lg-5">
+    <div class="card card-dark mb-3">
+      <div class="card-header border-secondary"><h6 class="mb-0">Ανάλυση Κόστους</h6></div>
+      <div class="card-body">
+        <table class="table table-dark table-sm mb-0">
+          <tbody>
+            <tr>
+              <td class="text-muted">Άμεσα Έξοδα (τιμολόγια)</td>
+              <td class="text-end text-danger">{{ '%.2f'|format(pl.direct_costs) }} €</td>
+            </tr>
+            <tr>
+              <td class="text-muted">Κόστος Υλικών</td>
+              <td class="text-end text-danger">{{ '%.2f'|format(pl.material_cost) }} €</td>
+            </tr>
+            <tr>
+              <td class="text-muted">Κόστος Εργασίας</td>
+              <td class="text-end text-danger">{{ '%.2f'|format(pl.labor_cost) }} €</td>
+            </tr>
+            {% if pl.subcontractor_cost > 0 %}
+            <tr>
+              <td class="text-muted"><i class="bi bi-person-gear me-1"></i>Κόστος Υπεργολάβων</td>
+              <td class="text-end text-danger">{{ '%.2f'|format(pl.subcontractor_cost) }} €</td>
+            </tr>
+            {% endif %}
+            <tr class="border-top border-secondary fw-bold">
+              <td>Σύνολο Εξόδων</td>
+              <td class="text-end text-danger">{{ '%.2f'|format(pl.total_cost) }} €</td>
+            </tr>
+            <tr class="fw-bold">
+              <td>Μικτό Κέρδος</td>
+              <td class="text-end {{ 'text-success' if pl.gross_profit >= 0 else 'text-danger' }}">
+                {{ '%.2f'|format(pl.gross_profit) }} €
+              </td>
+            </tr>
+            <tr>
+              <td class="text-muted">Περιθώριο %</td>
+              <td class="text-end {{ 'text-success' if pl.margin_pct >= 0 else 'text-danger' }}">
+                {{ pl.margin_pct }}%
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Progress bar -->
+        <div class="mt-3">
+          {% set pct = [pl.margin_pct, 100]|min|int %}
+          {% set color = 'success' if pl.margin_pct > 20 else 'warning' if pl.margin_pct > 0 else 'danger' %}
+          <div class="d-flex justify-content-between small text-muted mb-1">
+            <span>Κόστος</span><span>Κέρδος {{ pl.margin_pct }}%</span>
+          </div>
+          <div class="progress" style="height:12px;background:#222">
+            <div class="progress-bar bg-{{ color }}" style="width:{{ [pct,0]|max }}%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Income invoices -->
+  <div class="col-lg-7">
+    <div class="card card-dark mb-3">
+      <div class="card-header border-secondary"><h6 class="mb-0 text-success">Τιμολόγια Εσόδων</h6></div>
+      <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0">
+          <thead><tr><th>Αρ.</th><th>Ημ/νία</th><th>Εκδότης</th><th class="text-end">Σύνολο €</th><th>Κατάσταση</th></tr></thead>
+          <tbody>
+            {% for inv in pl.inv_income %}
+            <tr>
+              <td class="small">{{ inv.invoice_number or '—' }}</td>
+              <td class="small">{{ inv.invoice_date.strftime('%d/%m/%Y') if inv.invoice_date else '—' }}</td>
+              <td class="small">{{ inv.issuer or inv.recipient or '—' }}</td>
+              <td class="text-end">{{ '%.2f'|format(inv.total_amount|float) }} €</td>
+              <td><span class="badge bg-{{ 'success' if inv.payment_status=='paid' else 'warning text-dark' }}">{{ inv.payment_status or '—' }}</span></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-muted text-center small py-2">Δεν υπάρχουν τιμολόγια εσόδων.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card card-dark mb-3">
+      <div class="card-header border-secondary"><h6 class="mb-0 text-danger">Τιμολόγια Εξόδων</h6></div>
+      <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0">
+          <thead><tr><th>Αρ.</th><th>Ημ/νία</th><th>Εκδότης</th><th class="text-end">Σύνολο €</th></tr></thead>
+          <tbody>
+            {% for inv in pl.inv_expense %}
+            <tr>
+              <td class="small">{{ inv.invoice_number or '—' }}</td>
+              <td class="small">{{ inv.invoice_date.strftime('%d/%m/%Y') if inv.invoice_date else '—' }}</td>
+              <td class="small">{{ inv.issuer or inv.recipient or '—' }}</td>
+              <td class="text-end">{{ '%.2f'|format(inv.total_amount|float) }} €</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-muted text-center small py-2">Δεν υπάρχουν τιμολόγια εξόδων.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% if pl.mat_usages %}
+    <div class="card card-dark mb-3">
+      <div class="card-header border-secondary"><h6 class="mb-0 text-warning">Υλικά που Χρησιμοποιήθηκαν</h6></div>
+      <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0">
+          <thead><tr><th>Υλικό</th><th class="text-end">Ποσ.</th><th class="text-end">Κόστος €</th></tr></thead>
+          <tbody>
+            {% for u in pl.mat_usages %}
+            <tr>
+              <td class="small">{{ u.material.name if u.material else '—' }}</td>
+              <td class="text-end small">{{ u.quantity }} {{ u.material.unit if u.material else '' }}</td>
+              <td class="text-end">{{ '%.2f'|format(u.line_cost) }} €</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if pl.sub_invoices_list %}
+    <div class="card card-dark mb-3">
+      <div class="card-header border-secondary">
+        <h6 class="mb-0"><i class="bi bi-person-gear me-1 text-info"></i>Τιμολόγια Υπεργολάβων</h6>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0">
+          <thead><tr><th>Αρ.</th><th>Υπεργολάβος</th><th>Ημ/νία</th><th class="text-end">Καθαρή €</th><th>Κατάσταση</th></tr></thead>
+          <tbody>
+            {% for inv in pl.sub_invoices_list %}
+            <tr>
+              <td class="small">{{ inv.invoice_number or '—' }}</td>
+              <td class="small">{{ inv.contract.subcontractor.company_name if inv.contract and inv.contract.subcontractor else '—' }}</td>
+              <td class="small">{{ inv.invoice_date.strftime('%d/%m/%Y') if inv.invoice_date else '—' }}</td>
+              <td class="text-end text-danger">{{ '%.2f'|format(inv.amount_net|float) }} €</td>
+              <td><span class="badge bg-{{ inv.status_color }}">{{ inv.status_label }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,801 @@
+{% extends "base.html" %}
+{% block title %}{{ project.code }} — {{ project.title[:40] }}{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('projects.index') }}">Έργα</a></li>
+<li class="breadcrumb-item active">{{ project.code }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <span class="badge bg-dark" style="font-family:monospace;font-size:14px">{{ project.code }}</span>
+      <span class="badge status-{{ project.status }} fs-6">{{ project.status_label }}</span>
+    </div>
+    <h1 class="page-title">{{ project.title }}</h1>
+    <p class="page-subtitle">
+      <i class="bi bi-geo-alt me-1"></i>{{ project.location or '—' }}
+      {% if project.conservation_type %}· {{ project.conservation_type }}{% endif %}
+      {% if project.supervising_authority %}· {{ project.supervising_authority }}{% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('projects.photos', id=project.id) }}" class="btn btn-outline-warning">
+      <i class="bi bi-camera me-1"></i>Φωτογραφίες
+    </a>
+    <a href="{{ url_for('reports.project_pl', id=project.id) }}" class="btn btn-outline-success">
+      <i class="bi bi-graph-up me-1"></i>P&amp;L
+    </a>
+    <a href="{{ url_for('projects.edit', id=project.id) }}" class="btn btn-outline-secondary"><i class="bi bi-pencil me-1"></i>Επεξεργασία</a>
+  </div>
+</div>
+
+<!-- Quick stats -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon blue"><i class="bi bi-graph-up"></i></div>
+      <div>
+        <div class="kpi-value">{{ project.progress_pct }}%</div>
+        <div class="kpi-label">Πρόοδος</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon green"><i class="bi bi-currency-euro"></i></div>
+      <div>
+        <div class="kpi-value" style="font-size:18px">{{ '{:,.0f}'.format(project.contract_value|float) if project.contract_value else '—' }}€</div>
+        <div class="kpi-label">Αξία Σύμβασης</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon orange"><i class="bi bi-cash-stack"></i></div>
+      <div>
+        <div class="kpi-value" style="font-size:18px">{{ project.budget_used_pct }}%</div>
+        <div class="kpi-label">Budget Χρησιμοποιήθηκε</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon {% if project.days_remaining is not none and project.days_remaining < 30 %}red{% else %}purple{% endif %}">
+        <i class="bi bi-calendar-event"></i>
+      </div>
+      <div>
+        <div class="kpi-value">{{ project.days_remaining if project.days_remaining is not none else '—' }}</div>
+        <div class="kpi-label">Ημέρες Εναπομένουν</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Main column -->
+  <div class="col-lg-8">
+
+    <!-- Phases -->
+    <div class="card mb-3">
+      <div class="card-header justify-content-between">
+        <span><i class="bi bi-list-ol"></i> Φάσεις Έργου</span>
+        <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#addPhaseModal"><i class="bi bi-plus"></i> Φάση</button>
+      </div>
+      <div class="card-body py-2">
+        {% for ph in phases %}
+        <div class="phase-row">
+          <div class="phase-name">
+            <span class="badge bg-secondary me-2">{{ loop.index }}</span>{{ ph.name }}
+          </div>
+          <div class="phase-dates">
+            {% if ph.start_date %}{{ ph.start_date.strftime('%d/%m') }}{% endif %}
+            {% if ph.end_date %}→ {{ ph.end_date.strftime('%d/%m/%Y') }}{% endif %}
+          </div>
+          {% if ph.budget %}<small class="text-muted">{{ '{:,.0f}'.format(ph.budget|float) }}€</small>{% endif %}
+          <div class="d-flex gap-1">
+            {% for s, l, cls in [('pending','Εκκρεμεί','outline-secondary'),('active','Ενεργή','outline-primary'),('completed','Ολοκλ.','outline-success')] %}
+            <form method="POST" action="{{ url_for('projects.phase_status', phase_id=ph.id, new_status=s) }}">
+              <button class="btn btn-sm btn-{{ cls }} {% if ph.status==s %}active{% endif %}" style="font-size:11px">{{ l }}</button>
+            </form>
+            {% endfor %}
+          </div>
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-3 mb-0">Δεν υπάρχουν φάσεις ακόμα.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Daily log -->
+    <div class="card mb-3">
+      <div class="card-header justify-content-between">
+        <span><i class="bi bi-journal-text"></i> Ημερολόγιο Έργου</span>
+        <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#addLogModal"><i class="bi bi-plus"></i> Καταχώρηση</button>
+      </div>
+      <div class="card-body py-2">
+        {% for log in logs %}
+        <div class="log-entry">
+          <div class="d-flex justify-content-between mb-1">
+            <strong>{{ log.log_date.strftime('%d/%m/%Y') }}</strong>
+            <small class="text-muted">
+              {% if log.weather %}<i class="bi bi-cloud me-1"></i>{{ log.weather }}{% endif %}
+              {% if log.workers_count %}· {{ log.workers_count }} εργάτες{% endif %}
+              {% if log.hours_worked %}· {{ log.hours_worked }}ω{% endif %}
+            </small>
+          </div>
+          <div style="font-size:13.5px; white-space:pre-wrap">{{ log.description }}</div>
+          {% if log.author %}<small class="text-muted">— {{ log.author.full_name }}</small>{% endif %}
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-3 mb-0">Δεν υπάρχουν καταχωρήσεις.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Team -->
+    <div class="card mb-3">
+      <div class="card-header justify-content-between">
+        <span><i class="bi bi-people"></i> Συνεργείο ({{ team|length }} άτομα)</span>
+        <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#addTeamModal"><i class="bi bi-plus"></i> Μέλος</button>
+      </div>
+      {% if team %}
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Όνομα</th><th>Ειδικότητα</th><th>Ρόλος στο Έργο</th><th>Ημ/νιο Έναρξης</th><th>Ημ. Κόστος</th><th></th></tr></thead>
+          <tbody>
+            {% for m in team %}
+            <tr>
+              <td class="fw-semibold">{{ m.employee.full_name }}</td>
+              <td><small class="text-muted">{{ m.employee.specialty or '—' }}</small></td>
+              <td>{{ m.role or '—' }}</td>
+              <td>{{ m.start_date.strftime('%d/%m/%Y') if m.start_date else '—' }}</td>
+              <td>{% if m.daily_rate %}{{ '{:,.0f}'.format(m.daily_rate|float) }}€{% else %}—{% endif %}</td>
+              <td>
+                <form method="POST" action="{{ url_for('projects.remove_team_member', member_id=m.id) }}">
+                  <button class="btn btn-sm btn-outline-danger" data-confirm="Αφαίρεση μέλους;"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-center text-muted py-3">Δεν έχει ανατεθεί συνεργείο.</div>
+      {% endif %}
+    </div>
+
+    <!-- Project Chat -->
+    <div class="card mb-3" id="chat">
+      <div class="card-header justify-content-between">
+        <span><i class="bi bi-chat-dots text-primary"></i> Chat Συνεργείου</span>
+        <small class="text-muted">{{ project.messages.count() }} μηνύματα</small>
+      </div>
+      <div id="project-chat-box" style="height:260px;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:#fafaf8">
+        {% for msg in project.messages.order_by('created_at').all() %}
+        {% set is_me = msg.user_id == current_user.id %}
+        <div class="d-flex gap-2 align-items-end {% if is_me %}flex-row-reverse{% endif %}">
+          <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 fw-bold text-white"
+               style="width:28px;height:28px;font-size:11px;background:{% if is_me %}#111{% else %}#c9a84c{% endif %}">
+            {{ (msg.user.full_name or msg.user.username)[0].upper() }}
+          </div>
+          <div style="max-width:75%">
+            <div class="p-2 rounded" style="font-size:13px;background:{% if is_me %}#111;color:#c9a84c{% else %}#fff;border:1px solid #e2e8f0{% endif %}">
+              {{ msg.message }}
+            </div>
+            <div class="text-muted" style="font-size:10px;{% if is_me %}text-align:right{% endif %};margin-top:2px">
+              {{ msg.user.full_name or msg.user.username }} · {{ msg.created_at.strftime('%d/%m %H:%M') }}
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4" style="font-size:13px">
+          <i class="bi bi-chat d-block fs-2 opacity-25 mb-2"></i>Δεν υπάρχουν μηνύματα ακόμη
+        </div>
+        {% endfor %}
+      </div>
+      <div class="card-body border-top py-2">
+        <form method="POST" action="{{ url_for('projects.send_message', id=project.id) }}" class="d-flex gap-2">
+          <input type="text" name="message" class="form-control form-control-sm" placeholder="Γράψτε μήνυμα…" required autocomplete="off">
+          <button type="submit" class="btn btn-sm btn-primary" style="white-space:nowrap">
+            <i class="bi bi-send"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Invoices -->
+    <div class="card">
+      <div class="card-header justify-content-between">
+        <span><i class="bi bi-receipt"></i> Τιμολόγια Έργου</span>
+        <a href="{{ url_for('invoices.upload') }}?project_id={{ project.id }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus"></i> Τιμολόγιο</a>
+      </div>
+      {% if invoices.all()|length > 0 %}
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Αρ.</th><th>Εκδότης</th><th>Ημ.</th><th>Ποσό</th><th>Κατηγορία</th><th>Κατάσταση</th></tr></thead>
+          <tbody>
+            {% for inv in invoices %}
+            <tr>
+              <td class="fw-semibold">{{ inv.invoice_number or '#'+inv.id|string }}</td>
+              <td class="text-truncate" style="max-width:140px">{{ inv.issuer or '—' }}</td>
+              <td>{{ inv.invoice_date.strftime('%d/%m/%Y') if inv.invoice_date else '—' }}</td>
+              <td class="{% if inv.invoice_type=='income' %}text-success{% else %}text-danger{% endif %} fw-semibold">{{ '{:,.2f}'.format(inv.total_amount|float) }}€</td>
+              <td><small>{{ inv.category or '—' }}</small></td>
+              <td><span class="badge status-{{ inv.payment_status }}">{{ inv.payment_status }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-center text-muted py-3">Δεν υπάρχουν τιμολόγια.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Right sidebar -->
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-info-circle"></i> Στοιχεία</div>
+      <div class="card-body">
+        <dl class="row mb-0" style="font-size:13px">
+          <dt class="col-5 text-muted">Πελάτης</dt>
+          <dd class="col-7 fw-semibold">{{ project.client_name or '—' }}</dd>
+          <dt class="col-5 text-muted">Επικοινωνία</dt>
+          <dd class="col-7">{{ project.client_contact or '—' }}</dd>
+          <dt class="col-5 text-muted">Email</dt>
+          <dd class="col-7">{{ project.client_email or '—' }}</dd>
+          <dt class="col-5 text-muted">ΑΦΜ</dt>
+          <dd class="col-7"><code>{{ project.client_afm or '—' }}</code></dd>
+          <dt class="col-5 text-muted">Έναρξη</dt>
+          <dd class="col-7">{{ project.start_date.strftime('%d/%m/%Y') if project.start_date else '—' }}</dd>
+          <dt class="col-5 text-muted">Λήξη</dt>
+          <dd class="col-7">{{ project.end_date.strftime('%d/%m/%Y') if project.end_date else '—' }}</dd>
+          <dt class="col-5 text-muted">Budget</dt>
+          <dd class="col-7">{{ '{:,.2f}'.format(project.total_budget|float) if project.total_budget else '—' }}€</dd>
+          <dt class="col-5 text-muted">Δαπάνες</dt>
+          <dd class="col-7 text-danger fw-semibold">{{ '{:,.2f}'.format(project.spent_budget|float) }}€</dd>
+          <dt class="col-5 text-muted">Υπεύθυνος</dt>
+          <dd class="col-7">{{ project.manager.full_name if project.manager else '—' }}</dd>
+          {% if project.tender %}
+          <dt class="col-5 text-muted">Διαγωνισμός</dt>
+          <dd class="col-7"><a href="{{ url_for('tenders.detail', id=project.tender.id) }}">{{ project.tender.title[:30] }}…</a></dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <!-- Progress update -->
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-sliders"></i> Ενημέρωση Προόδου</div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('projects.edit', id=project.id) }}">
+          <input type="hidden" name="title" value="{{ project.title }}">
+          <label class="form-label">Πρόοδος: <strong id="prog_label">{{ project.progress_pct }}%</strong></label>
+          <input type="range" name="progress_pct" class="form-range" min="0" max="100" step="5" value="{{ project.progress_pct }}"
+            oninput="document.getElementById('prog_label').textContent=this.value+'%'">
+          <label class="form-label mt-2">Κατάσταση</label>
+          <select name="status" class="form-select form-select-sm mb-3">
+            {% for s, l in [('planning','Σχεδιασμός'),('active','Ενεργό'),('paused','Παύση'),('completed','Ολοκληρώθηκε'),('cancelled','Ακυρώθηκε')] %}
+            <option value="{{ s }}" {% if project.status==s %}selected{% endif %}>{{ l }}</option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-sm btn-primary w-100"><i class="bi bi-check2 me-1"></i>Αποθήκευση</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Payment Schedule -->
+    <div class="card mb-3" id="payments">
+      <div class="card-header justify-content-between">
+        <span><i class="bi bi-cash-stack text-primary"></i> Πληρωμές Σύμβασης</span>
+        {% if current_user.role in ('admin', 'manager') %}
+        <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#addPaymentModal">
+          <i class="bi bi-plus"></i>
+        </button>
+        {% endif %}
+      </div>
+      <div class="card-body py-2">
+        {% set pps = project.payment_schedule.all() %}
+        {% if pps %}
+          {% set total_owed = pps|map(attribute='amount_expected')|map('float')|sum %}
+          {% set total_paid = pps|map(attribute='amount_paid')|map('float')|sum %}
+          <div class="d-flex justify-content-between mb-2" style="font-size:12px">
+            <span class="text-muted">Χρεωστούμενο</span>
+            <strong>{{ '{:,.2f}'.format(total_owed) }}€</strong>
+          </div>
+          <div class="d-flex justify-content-between mb-2" style="font-size:12px">
+            <span class="text-muted">Εισπραχθέν</span>
+            <strong class="text-success">{{ '{:,.2f}'.format(total_paid) }}€</strong>
+          </div>
+          <div class="d-flex justify-content-between mb-3" style="font-size:12px">
+            <span class="text-muted">Εκκρεμεί</span>
+            <strong class="text-danger">{{ '{:,.2f}'.format(total_owed - total_paid) }}€</strong>
+          </div>
+          {% for pp in pps %}
+          <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+            <div>
+              <div style="font-size:13px" class="fw-semibold">{{ pp.title }}</div>
+              {% if pp.milestone %}<small class="text-muted d-block">{{ pp.milestone[:50] }}</small>{% endif %}
+              <small class="text-muted">
+                {% if pp.due_date %}{{ pp.due_date.strftime('%d/%m/%Y') }}{% else %}—{% endif %}
+              </small>
+            </div>
+            <div class="text-end">
+              <div class="fw-semibold" style="font-size:13px">{{ '{:,.2f}'.format(pp.amount_expected|float) }}€</div>
+              {% if pp.status == 'paid' %}
+                <span class="badge bg-success" style="font-size:10px">
+                  <i class="bi bi-check-lg"></i> {{ pp.paid_date.strftime('%d/%m/%Y') if pp.paid_date else 'Εξοφλ.' }}
+                </span>
+              {% else %}
+                <span class="badge bg-{{ pp.status_color }} text-dark" style="font-size:10px">{{ pp.status_label }}</span>
+                {% if current_user.role in ('admin', 'manager') %}
+                <form method="POST" action="{{ url_for('projects.pay_project_payment', pp_id=pp.id) }}" class="d-inline mt-1">
+                  <input type="hidden" name="amount_paid" value="{{ pp.amount_expected }}">
+                  <button type="submit" class="btn btn-outline-success" style="font-size:10px;padding:1px 6px">
+                    ✓ Σήμανση
+                  </button>
+                </form>
+                {% endif %}
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-muted text-center py-2 mb-0" style="font-size:13px">Δεν υπάρχουν δόσεις.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Phase Modal -->
+<div class="modal fade" id="addPhaseModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('projects.add_phase', id=project.id) }}">
+        <div class="modal-header"><h5 class="modal-title">Προσθήκη Φάσης</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body row g-3">
+          <div class="col-12"><label class="form-label">Όνομα Φάσης *</label><input type="text" name="name" class="form-control" required placeholder="π.χ. Αποτύπωση — Φωτογράφηση"></div>
+          <div class="col-12"><label class="form-label">Περιγραφή</label><textarea name="description" class="form-control" rows="2"></textarea></div>
+          <div class="col-6"><label class="form-label">Έναρξη</label><input type="date" name="start_date" class="form-control"></div>
+          <div class="col-6"><label class="form-label">Λήξη</label><input type="date" name="end_date" class="form-control"></div>
+          <div class="col-12"><label class="form-label">Budget Φάσης (€)</label><input type="number" name="budget" class="form-control" step="0.01"></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button><button type="submit" class="btn btn-primary">Αποθήκευση</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Add Payment Modal -->
+<div class="modal fade" id="addPaymentModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('projects.new_project_payment', id=project.id) }}">
+        <div class="modal-header">
+          <h5 class="modal-title">Νέα Δόση / Πληρωμή</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body row g-3">
+          <div class="col-12">
+            <label class="form-label">Τίτλος Δόσης *</label>
+            <input type="text" name="title" class="form-control" required
+                   placeholder="π.χ. 1η Δόση — Υπογραφή Σύμβασης">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Ορόσημο / Προϋπόθεση</label>
+            <input type="text" name="milestone" class="form-control"
+                   placeholder="π.χ. Μετά την παράδοση μελέτης">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Αναμενόμενο Ποσό (€) *</label>
+            <input type="number" name="amount_expected" class="form-control" step="0.01" required>
+          </div>
+          <div class="col-6">
+            <label class="form-label">Προθεσμία Πληρωμής</label>
+            <input type="date" name="due_date" class="form-control">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Σημειώσεις</label>
+            <textarea name="notes" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button>
+          <button type="submit" class="btn btn-gold">Προσθήκη</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── CALENDAR / TIMELINE ──────────────────────────────────────────── -->
+<div class="card mb-3" id="calendar">
+  <div class="card-header justify-content-between">
+    <span><i class="bi bi-calendar-event me-1 text-gold"></i>Ημερολόγιο & Χρονοδιάγραμμα ({{ events|length }})</span>
+    <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#addEventModal">
+      <i class="bi bi-plus-lg me-1"></i>Νέο Συμβάν
+    </button>
+  </div>
+
+  <!-- Mini FullCalendar -->
+  <div class="card-body p-0">
+    <div id="project-calendar" style="min-height:320px; padding:12px"></div>
+  </div>
+
+  {% if events %}
+  <div class="table-responsive border-top">
+    <table class="table table-sm mb-0">
+      <thead class="table-dark"><tr>
+        <th>Τίτλος</th><th>Τύπος</th><th>Ημερομηνία</th><th>Στόχος %</th><th>Κατάσταση</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for ev in events %}
+        <tr class="{{ 'table-success' if ev.achieved else '' }}">
+          <td class="fw-semibold">
+            <span class="badge me-1" style="background:{{ ev.type_color }}">&#8203;</span>
+            {{ ev.title }}
+            {% if ev.description %}<div class="text-muted small">{{ ev.description | truncate(60) }}</div>{% endif %}
+          </td>
+          <td><span class="badge" style="background:{{ ev.type_color }}">{{ ev.type_label }}</span></td>
+          <td>
+            {{ ev.start_date.strftime('%d/%m/%Y') }}
+            {% if ev.end_date and ev.end_date != ev.start_date %}→ {{ ev.end_date.strftime('%d/%m/%Y') }}{% endif %}
+          </td>
+          <td>{% if ev.milestone_target_pct %}{{ ev.milestone_target_pct }}%{% else %}—{% endif %}</td>
+          <td>
+            {% if ev.achieved %}
+            <span class="badge bg-success"><i class="bi bi-check-lg"></i> Επιτεύχθηκε</span>
+            {% elif ev.start_date <= today %}
+            <span class="badge bg-warning text-dark">Σε εξέλιξη</span>
+            {% else %}
+            <span class="badge bg-secondary">Προγραμματισμένο</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="btn-group btn-group-sm">
+              <form method="post" action="{{ url_for('projects.toggle_event', event_id=ev.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline-{{ 'secondary' if ev.achieved else 'success' }}" title="{{ 'Αναίρεση' if ev.achieved else 'Επιτεύχθηκε' }}">
+                  <i class="bi bi-{{ 'x-circle' if ev.achieved else 'check-circle' }}"></i>
+                </button>
+              </form>
+              <form method="post" action="{{ url_for('projects.delete_event', event_id=ev.id) }}" class="d-inline"
+                    onsubmit="return confirm('Διαγραφή συμβάντος;')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline-danger"><i class="bi bi-trash"></i></button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body text-center text-muted py-4">
+    <i class="bi bi-calendar-x fs-2 opacity-25 d-block mb-2"></i>
+    Δεν υπάρχουν συμβάντα. Προσθέστε σκαλωσιά, κλείσιμο χώρου, στόχους κ.ά.
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── PROJECT STUDY (ΜΕΛΕΤΗ - ADMIN ONLY) ───────────────────────────── -->
+{% if current_user.role in ('admin', 'manager') %}
+<div class="card mb-3" id="study">
+  <div class="card-header justify-content-between">
+    <span><i class="bi bi-file-earmark-text me-1 text-gold"></i>Μελέτη Έργου
+      <span class="badge bg-danger ms-1" title="Μόνο διαχειριστές">Admin</span>
+    </span>
+    <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#studyUploadModal">
+      <i class="bi bi-upload me-1"></i>{{ 'Αντικατάσταση' if project.study_file_path else 'Ανέβασμα' }} Μελέτης
+    </button>
+  </div>
+  <div class="card-body">
+    {% if project.study_file_path %}
+    <div class="d-flex align-items-center gap-3">
+      <i class="bi bi-file-earmark-pdf fs-2 text-danger"></i>
+      <div>
+        <div class="fw-semibold">{{ project.study_file_name }}</div>
+        <div class="text-muted small">Τεχνική μελέτη έργου (εμπιστευτικό)</div>
+      </div>
+      <a href="{{ url_for('projects.view_study', id=project.id) }}" target="_blank"
+         class="btn btn-primary btn-sm ms-auto">
+        <i class="bi bi-eye me-1"></i>Άνοιγμα
+      </a>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-3">
+      <i class="bi bi-file-earmark-plus fs-2 opacity-25 d-block mb-2"></i>
+      Δεν έχει ανέβει μελέτη. Μόνο εσείς έχετε πρόσβαση.
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ── MATERIAL / EQUIPMENT REQUESTS ─────────────────────────────────── -->
+<div class="card mb-3" id="requests">
+  <div class="card-header justify-content-between">
+    <span><i class="bi bi-box-seam me-1 text-gold"></i>Αιτήσεις Αναλωσίμων & Εξοπλισμού
+      {% set pending_reqs = material_requests | selectattr('status', 'equalto', 'pending') | list %}
+      {% if pending_reqs %}<span class="badge bg-warning text-dark ms-1">{{ pending_reqs|length }}</span>{% endif %}
+    </span>
+    <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#newRequestModal">
+      <i class="bi bi-plus-lg me-1"></i>Νέα Αίτηση
+    </button>
+  </div>
+  {% if material_requests %}
+  <div class="table-responsive">
+    <table class="table table-hover table-sm mb-0">
+      <thead class="table-dark"><tr>
+        <th>Αίτηση</th><th>Τύπος</th><th>Επείγον</th><th>Κατάσταση</th><th>Αιτών</th><th>Ημ.</th>
+        {% if current_user.role in ('admin','manager') %}<th>Ενέργεια</th>{% endif %}
+      </tr></thead>
+      <tbody>
+        {% for r in material_requests %}
+        <tr>
+          <td>
+            <div class="fw-semibold">{{ r.title }}</div>
+            {% if r.description %}<div class="text-muted small">{{ r.description | truncate(60) }}</div>{% endif %}
+            {% if r.quantity %}<div class="small text-muted"><i class="bi bi-123"></i> {{ r.quantity }}</div>{% endif %}
+          </td>
+          <td><span class="badge bg-secondary">{{ 'Αναλώσιμα' if r.request_type == 'materials' else 'Εξοπλισμός' }}</span></td>
+          <td><span class="badge bg-{{ r.urgency_color }}">{{ r.urgency_label }}</span></td>
+          <td>
+            <span class="badge bg-{{ 'warning text-dark' if r.status=='pending' else 'success' if r.status in ('approved','fulfilled') else 'danger' }}">
+              {{ r.status_label }}
+            </span>
+            {% if r.reviewer_notes %}<div class="text-muted small">{{ r.reviewer_notes | truncate(40) }}</div>{% endif %}
+          </td>
+          <td class="small">{{ r.requested_by.full_name.split()[0] if r.requested_by else '—' }}</td>
+          <td class="small text-muted">{{ r.created_at.strftime('%d/%m') }}</td>
+          {% if current_user.role in ('admin','manager') and r.status == 'pending' %}
+          <td>
+            <form method="post" action="{{ url_for('projects.review_material_request', req_id=r.id) }}" class="d-flex gap-1">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button name="action" value="approved" class="btn btn-success btn-sm"><i class="bi bi-check-lg"></i></button>
+              <button name="action" value="rejected" class="btn btn-danger btn-sm"><i class="bi bi-x-lg"></i></button>
+              <button name="action" value="fulfilled" class="btn btn-info btn-sm"><i class="bi bi-truck"></i></button>
+            </form>
+          </td>
+          {% elif current_user.role in ('admin','manager') %}<td>—</td>{% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body text-center text-muted py-3">
+    <i class="bi bi-box-seam fs-2 opacity-25 d-block mb-2"></i>
+    Δεν υπάρχουν αιτήσεις για αυτό το έργο.
+  </div>
+  {% endif %}
+</div>
+
+<!-- Add Event Modal -->
+<div class="modal fade" id="addEventModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('projects.add_event', id=project.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-calendar-plus me-2"></i>Νέο Συμβάν Ημερολογίου</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body row g-3">
+          <div class="col-12">
+            <label class="form-label fw-semibold">Τίτλος *</label>
+            <input type="text" name="title" class="form-control" placeholder="π.χ. Στήσιμο σκαλωσιάς δυτικής πλευράς" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Τύπος</label>
+            <select name="event_type" class="form-select" id="eventTypeSelect">
+              <option value="scaffolding">🔧 Στήσιμο Σκαλωσιάς</option>
+              <option value="closure">🚫 Κλείσιμο Χώρου/Ναού</option>
+              <option value="milestone">🎯 Επίτευξη Στόχου</option>
+              <option value="inspection">🔍 Επιθεώρηση</option>
+              <option value="delivery">🚚 Παράδοση/Παραλαβή</option>
+              <option value="meeting">👥 Σύσκεψη</option>
+              <option value="other">📌 Άλλο</option>
+            </select>
+          </div>
+          <div class="col-md-6" id="milestoneField" style="display:none">
+            <label class="form-label">Στόχος Ολοκλήρωσης %</label>
+            <input type="number" name="milestone_target_pct" class="form-control" min="0" max="100"
+                   placeholder="π.χ. 50">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Ημ. Έναρξης *</label>
+            <input type="date" name="start_date" class="form-control"
+                   value="{{ today.strftime('%Y-%m-%d') }}" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Ημ. Λήξης</label>
+            <input type="date" name="end_date" class="form-control">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Περιγραφή</label>
+            <textarea name="description" class="form-control" rows="2"
+                      placeholder="Λεπτομέρειες συμβάντος…"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-calendar-check me-1"></i>Προσθήκη</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Study Upload Modal -->
+{% if current_user.role in ('admin','manager') %}
+<div class="modal fade" id="studyUploadModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('projects.upload_study', id=project.id) }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-file-earmark-text me-2"></i>Ανέβασμα Μελέτης Έργου</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-warning small">
+            <i class="bi bi-lock me-1"></i>Η μελέτη είναι ορατή ΜΟΝΟ σε Admin/Manager.
+          </div>
+          <label class="form-label fw-semibold">Αρχείο Μελέτης *</label>
+          <input type="file" name="study_file" class="form-control"
+                 accept=".pdf,.doc,.docx" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-upload me-1"></i>Ανέβασμα</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- New Material Request Modal -->
+<div class="modal fade" id="newRequestModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('projects.new_material_request', id=project.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-box-seam me-2"></i>Αίτηση Αναλωσίμων / Εξοπλισμού</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Τύπος Αίτησης</label>
+            <select name="request_type" class="form-select">
+              <option value="materials">Αναλώσιμα / Υλικά</option>
+              <option value="equipment">Εξοπλισμός / Εργαλεία</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Επείγον</label>
+            <select name="urgency" class="form-select">
+              <option value="low">Χαμηλό</option>
+              <option value="normal" selected>Κανονικό</option>
+              <option value="high">Υψηλό</option>
+              <option value="urgent">Επείγον</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Τίτλος Αίτησης *</label>
+            <input type="text" name="title" class="form-control"
+                   placeholder="π.χ. Ακρυλικά χρώματα συντήρησης τοιχογραφιών" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Ποσότητα</label>
+            <input type="text" name="quantity" class="form-control" placeholder="π.χ. 5 λίτρα">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Περιγραφή / Προδιαγραφές</label>
+            <textarea name="description" class="form-control" rows="3"
+                      placeholder="Λεπτομέρειες, τεχνικές προδιαγραφές, εναλλακτικά…"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-send me-1"></i>Υποβολή Αίτησης</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Add Log Modal -->
+<div class="modal fade" id="addLogModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('projects.add_log', id=project.id) }}">
+        <div class="modal-header"><h5 class="modal-title"><i class="bi bi-journal-plus me-2"></i>Καταχώρηση Ημερολογίου</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body row g-3">
+          <div class="col-md-4"><label class="form-label">Ημερομηνία *</label><input type="date" name="log_date" class="form-control" required value="{{ today.strftime('%Y-%m-%d') if today is defined else '' }}"></div>
+          <div class="col-md-4"><label class="form-label">Καιρός</label><select name="weather" class="form-select"><option value="">—</option><option>Αίθριος</option><option>Συννεφιά</option><option>Βροχή</option><option>Άνεμος</option><option>Χιόνι</option></select></div>
+          <div class="col-md-2"><label class="form-label">Εργάτες</label><input type="number" name="workers_count" class="form-control" min="0"></div>
+          <div class="col-md-2"><label class="form-label">Ώρες</label><input type="number" name="hours_worked" class="form-control" step="0.5" min="0"></div>
+          <div class="col-12"><label class="form-label">Εργασίες που εκτελέστηκαν *</label><textarea name="description" class="form-control" rows="5" required placeholder="Περιγράψτε αναλυτικά τις εργασίες…"></textarea></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button><button type="submit" class="btn btn-primary">Αποθήκευση</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Add Team Modal -->
+<div class="modal fade" id="addTeamModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('projects.add_team_member', id=project.id) }}">
+        <div class="modal-header"><h5 class="modal-title">Προσθήκη Μέλους Συνεργείου</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body row g-3">
+          <div class="col-12"><label class="form-label">Υπάλληλος *</label>
+            <select name="employee_id" class="form-select" required>
+              <option value="">— Επιλέξτε —</option>
+              {% for emp in employees_all %}
+              <option value="{{ emp.id }}">{{ emp.full_name }} — {{ emp.specialty or '' }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6"><label class="form-label">Ρόλος στο Έργο</label><input type="text" name="role" class="form-control" placeholder="π.χ. Επικεφαλής Συντηρητής"></div>
+          <div class="col-md-6"><label class="form-label">Ημ. Κόστος (€)</label><input type="number" name="daily_rate" class="form-control" step="0.01"></div>
+          <div class="col-12"><label class="form-label">Ημ. Ανάθεσης</label><input type="date" name="start_date" class="form-control"></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button><button type="submit" class="btn btn-primary">Προσθήκη</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<script>
+// Auto-scroll chat
+const chatBox = document.getElementById('project-chat-box');
+if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+
+// FullCalendar
+document.addEventListener('DOMContentLoaded', function () {
+  const el = document.getElementById('project-calendar');
+  if (!el) return;
+  const calendar = new FullCalendar.Calendar(el, {
+    locale: 'el',
+    initialView: 'dayGridMonth',
+    headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' },
+    height: 320,
+    events: '{{ url_for("projects.events_json", id=project.id) }}',
+    eventClick: function(info) {
+      const p = info.event.extendedProps;
+      alert(`${info.event.title}\n${p.type}\n${p.description || ''}`);
+    },
+    eventDidMount: function(info) {
+      if (info.event.extendedProps.achieved) {
+        info.el.style.opacity = '0.65';
+        info.el.style.textDecoration = 'line-through';
+      }
+    }
+  });
+  calendar.render();
+});
+
+// Show/hide milestone % field
+const evTypeSelect = document.getElementById('eventTypeSelect');
+if (evTypeSelect) {
+  evTypeSelect.addEventListener('change', function() {
+    document.getElementById('milestoneField').style.display =
+      this.value === 'milestone' ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}Οχήματα — ERP{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Οχήματα</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-truck me-2 text-primary"></i>Οχήματα</h1>
+    <p class="page-subtitle">Στόλος, ΚΤΕΟ, Ασφάλειες, Service</p>
+  </div>
+  <button class="btn btn-gold" data-bs-toggle="modal" data-bs-target="#newVehicleModal">
+    <i class="bi bi-plus-lg me-1"></i>Νέο Όχημα
+  </button>
+</div>
+
+{% if alerts %}
+<div class="row g-2 mb-3">
+  {% for a in alerts %}
+  <div class="col-md-6">
+    <div class="alert alert-{% if a.days <= 7 %}danger{% else %}warning{% endif %} d-flex align-items-center gap-2 mb-0 py-2">
+      <i class="bi bi-{% if a.type=='ΚΤΕΟ' %}car-front{% else %}shield-exclamation{% endif %} fs-5"></i>
+      <div>
+        <strong>{{ a.vehicle.plate }} — {{ a.type }}</strong>
+        <small class="d-block">{{ a.date.strftime('%d/%m/%Y') }} · {% if a.days > 0 %}{{ a.days }} ημέρες{% else %}ΕΛΗΞΕ{% endif %}</small>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="row g-3">
+  {% for v in vehicles %}
+  <div class="col-lg-6 col-xl-4">
+    <div class="asset-card">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <span class="asset-plate">{{ v.plate }}</span>
+        <span class="badge {% if v.status=='available' %}status-active{% elif v.status=='in_use' %}status-submitted{% else %}bg-secondary{% endif %}">
+          {{ {'available':'Διαθέσιμο','in_use':'Σε Χρήση','maintenance':'Service','retired':'Αποσυρθείς'}.get(v.status, v.status) }}
+        </span>
+      </div>
+
+      <h6 class="fw-bold mb-1">{{ v.brand }} {{ v.model }} <span class="text-muted fw-normal">({{ v.year or '—' }})</span></h6>
+      <div class="text-muted small mb-3">
+        {{ {'van':'Van','truck':'Φορτηγό','car':'Επιβατικό','pickup':'Pick-up'}.get(v.vehicle_type, v.vehicle_type or '—') }} ·
+        {{ {'diesel':'Diesel','petrol':'Βενζίνη','electric':'Ηλεκτρικό','hybrid':'Υβριδικό'}.get(v.fuel_type, v.fuel_type or '—') }}
+      </div>
+
+      {% if v.driver %}
+      <div class="d-flex align-items-center gap-2 mb-3 p-2 bg-light rounded">
+        <i class="bi bi-person-badge text-primary"></i>
+        <div style="font-size:13px"><strong>Οδηγός:</strong> {{ v.driver.full_name }}</div>
+      </div>
+      {% endif %}
+
+      <!-- KM -->
+      {% if v.current_km %}
+      <div class="mb-2" style="font-size:13px">
+        <i class="bi bi-speedometer2 me-2 text-muted"></i>
+        {{ '{:,}'.format(v.current_km) }} χλμ
+        {% if v.next_service_km %}· Service στα {{ '{:,}'.format(v.next_service_km) }} χλμ{% endif %}
+      </div>
+      {% endif %}
+
+      <!-- ΚΤΕΟ -->
+      {% set kteo_days = v.kteo_days_remaining %}
+      <div class="mb-1" style="font-size:13px">
+        <i class="bi bi-car-front me-2 {% if kteo_days is not none and kteo_days <= 30 %}text-danger{% else %}text-muted{% endif %}"></i>
+        ΚΤΕΟ: {% if v.kteo_date %}
+          <span class="{% if kteo_days is not none and kteo_days <= 0 %}text-danger fw-bold{% elif kteo_days is not none and kteo_days <= 30 %}text-warning fw-semibold{% endif %}">
+            {{ v.kteo_date.strftime('%d/%m/%Y') }}
+            {% if kteo_days is not none and kteo_days > 0 %}({{ kteo_days }}η){% elif kteo_days is not none %}<strong>ΕΛΗΞΕ</strong>{% endif %}
+          </span>
+        {% else %}—{% endif %}
+      </div>
+
+      <!-- Insurance -->
+      {% set ins_days = v.insurance_days_remaining %}
+      <div class="mb-3" style="font-size:13px">
+        <i class="bi bi-shield-check me-2 {% if ins_days is not none and ins_days <= 30 %}text-warning{% else %}text-muted{% endif %}"></i>
+        Ασφάλεια: {% if v.insurance_expiry %}
+          <span class="{% if ins_days is not none and ins_days <= 0 %}text-danger fw-bold{% elif ins_days is not none and ins_days <= 30 %}text-warning{% endif %}">
+            {{ v.insurance_expiry.strftime('%d/%m/%Y') }}
+            {% if ins_days is not none and ins_days > 0 %}({{ ins_days }}η){% elif ins_days is not none %}<strong>ΕΛΗΞΕ</strong>{% endif %}
+          </span>
+          {% if v.insurance_company %}<br><small class="text-muted ms-4">{{ v.insurance_company }}</small>{% endif %}
+        {% else %}—{% endif %}
+      </div>
+
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-primary flex-fill" data-bs-toggle="modal" data-bs-target="#serviceModal{{ v.id }}">
+          <i class="bi bi-wrench me-1"></i>Service
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#kmModal{{ v.id }}" title="Ενημέρωση χλμ">
+          <i class="bi bi-speedometer2"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12">
+    <div class="empty-state"><i class="bi bi-truck d-block"></i><h5>Δεν υπάρχουν οχήματα</h5></div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- New Vehicle Modal -->
+<div class="modal fade" id="newVehicleModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('vehicles.new') }}">
+        <div class="modal-header"><h5 class="modal-title"><i class="bi bi-truck me-2"></i>Νέο Όχημα</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body row g-3">
+          <div class="col-md-4"><label class="form-label">Πινακίδα *</label><input type="text" name="plate" class="form-control" required placeholder="ΑΑΑ-0000" style="text-transform:uppercase"></div>
+          <div class="col-md-4"><label class="form-label">Μάρκα</label><input type="text" name="brand" class="form-control" placeholder="π.χ. Mercedes"></div>
+          <div class="col-md-4"><label class="form-label">Μοντέλο</label><input type="text" name="model" class="form-control" placeholder="π.χ. Sprinter"></div>
+          <div class="col-md-3"><label class="form-label">Έτος</label><input type="number" name="year" class="form-control" min="1990" max="2030"></div>
+          <div class="col-md-3">
+            <label class="form-label">Τύπος</label>
+            <select name="vehicle_type" class="form-select">
+              <option value="van">Van</option><option value="truck">Φορτηγό</option><option value="car">Επιβατικό</option><option value="pickup">Pick-up</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Καύσιμο</label>
+            <select name="fuel_type" class="form-select">
+              <option value="diesel">Diesel</option><option value="petrol">Βενζίνη</option><option value="electric">Ηλεκτρικό</option><option value="hybrid">Υβριδικό</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Οδηγός</label>
+            <select name="driver_id" class="form-select">
+              <option value="">—</option>
+              {% for emp in employees %}<option value="{{ emp.id }}">{{ emp.full_name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4"><label class="form-label">Ημ. ΚΤΕΟ</label><input type="date" name="kteo_date" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label">Λήξη Ασφάλειας</label><input type="date" name="insurance_expiry" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label">Κόστος Ασφάλειας (€/έτος)</label><input type="number" name="insurance_cost" class="form-control" step="0.01"></div>
+          <div class="col-md-6"><label class="form-label">Ασφαλιστική Εταιρεία</label><input type="text" name="insurance_company" class="form-control"></div>
+          <div class="col-md-6"><label class="form-label">Αρ. Ασφαλιστηρίου</label><input type="text" name="insurance_policy" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label">Τρέχοντα Χλμ</label><input type="number" name="current_km" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label">Επόμ. Service (Χλμ)</label><input type="number" name="next_service_km" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label">Αξία Αγοράς (€)</label><input type="number" name="purchase_price" class="form-control" step="0.01"></div>
+          <div class="col-12"><label class="form-label">Σημειώσεις</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button><button type="submit" class="btn btn-primary">Αποθήκευση</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Per-vehicle modals -->
+{% for v in vehicles %}
+<div class="modal fade" id="serviceModal{{ v.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('vehicles.add_maintenance', id=v.id) }}">
+        <div class="modal-header"><h5 class="modal-title">Service: {{ v.plate }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body row g-3">
+          <div class="col-md-6"><label class="form-label">Ημερομηνία *</label><input type="date" name="record_date" class="form-control" required></div>
+          <div class="col-md-6"><label class="form-label">Τύπος</label><input type="text" name="maintenance_type" class="form-control" placeholder="π.χ. Περιοδικό Service"></div>
+          <div class="col-12"><label class="form-label">Εργασίες</label><textarea name="description" class="form-control" rows="3"></textarea></div>
+          <div class="col-md-4"><label class="form-label">Κόστος (€)</label><input type="number" name="cost" class="form-control" step="0.01"></div>
+          <div class="col-md-4"><label class="form-label">Χλμ στο Service</label><input type="number" name="km_at_service" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label">Επόμ. Service (Χλμ)</label><input type="number" name="next_due_km" class="form-control"></div>
+          <div class="col-md-6"><label class="form-label">Συνεργείο</label><input type="text" name="provider" class="form-control"></div>
+          <div class="col-md-6"><label class="form-label">Επόμ. Service (Ημ.)</label><input type="date" name="next_due_date" class="form-control"></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button><button type="submit" class="btn btn-primary">Αποθήκευση</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="kmModal{{ v.id }}" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('vehicles.update_km', id=v.id) }}">
+        <div class="modal-header"><h6 class="modal-title">Χλμ: {{ v.plate }}</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <label class="form-label">Τρέχοντα Χιλιόμετρα</label>
+          <input type="number" name="current_km" class="form-control" value="{{ v.current_km or '' }}" required>
+        </div>
+        <div class="modal-footer"><button type="submit" class="btn btn-primary w-100">Αποθήκευση</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

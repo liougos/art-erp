@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+{% block title %}{{ emp.full_name }} — HR{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('hr.index') }}">HR</a></li>
+<li class="breadcrumb-item active">{{ emp.full_name }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="d-flex align-items-center gap-3">
+    {% if emp.photo_path %}
+    <img src="{{ url_for('static', filename='uploads/' + emp.photo_path) }}" class="rounded-circle" width="64" height="64" style="object-fit:cover">
+    {% else %}
+    <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center text-white fw-bold" style="width:64px;height:64px;font-size:24px;flex-shrink:0">
+      {{ emp.first_name[0] }}{{ emp.last_name[0] }}
+    </div>
+    {% endif %}
+    <div>
+      <h1 class="page-title mb-0">{{ emp.full_name }}</h1>
+      <p class="page-subtitle mb-0">{{ emp.specialty or '—' }} ·
+        <span class="badge {% if emp.status=='active' %}status-active{% else %}bg-secondary{% endif %}">
+          {{ {'active':'Ενεργός','inactive':'Ανενεργός','terminated':'Απολύθηκε','on_leave':'Σε Άδεια'}.get(emp.status, emp.status) }}
+        </span>
+      </p>
+    </div>
+  </div>
+  <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editModal">
+    <i class="bi bi-pencil me-1"></i>Επεξεργασία
+  </button>
+</div>
+
+<div class="row g-3">
+  <!-- Left: Details -->
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-person-vcard"></i> Στοιχεία</div>
+      <div class="card-body">
+        <dl class="row mb-0" style="font-size:13px">
+          <dt class="col-5 text-muted">ΑΦΜ</dt><dd class="col-7"><code>{{ emp.afm or '—' }}</code></dd>
+          <dt class="col-5 text-muted">ΑΜΚΑ</dt><dd class="col-7"><code>{{ emp.amka or '—' }}</code></dd>
+          <dt class="col-5 text-muted">Τηλέφωνο</dt>
+          <dd class="col-7">{% if emp.phone %}<a href="tel:{{ emp.phone }}">{{ emp.phone }}</a>{% else %}—{% endif %}</dd>
+          <dt class="col-5 text-muted">Email</dt>
+          <dd class="col-7 text-truncate">{% if emp.email %}<a href="mailto:{{ emp.email }}">{{ emp.email }}</a>{% else %}—{% endif %}</dd>
+          <dt class="col-5 text-muted">Διεύθυνση</dt><dd class="col-7">{{ emp.address or '—' }}</dd>
+          <dt class="col-5 text-muted">IBAN</dt><dd class="col-7"><code style="font-size:11px">{{ emp.iban or '—' }}</code></dd>
+          <dt class="col-5 text-muted">Απασχόληση</dt>
+          <dd class="col-7">{{ {'full-time':'Πλήρης','part-time':'Μερική','freelance':'Freelance','seasonal':'Εποχιακός'}.get(emp.employment_type,'—') }}</dd>
+          <dt class="col-5 text-muted">Μισθός</dt>
+          <dd class="col-7">{% if emp.basic_salary %}{{ '{:,.2f}'.format(emp.basic_salary|float) }}€{% else %}—{% endif %}</dd>
+          <dt class="col-5 text-muted">Σύμβαση</dt>
+          <dd class="col-7">
+            {{ emp.contract_start.strftime('%d/%m/%Y') if emp.contract_start else '—' }}
+            {% if emp.contract_end %} → {{ emp.contract_end.strftime('%d/%m/%Y') }}{% endif %}
+          </dd>
+          <dt class="col-5 text-muted">Επαφή έκτ.</dt>
+          <dd class="col-7">{{ emp.emergency_contact_name or '—' }}{% if emp.emergency_contact_phone %}<br><a href="tel:{{ emp.emergency_contact_phone }}">{{ emp.emergency_contact_phone }}</a>{% endif %}</dd>
+        </dl>
+      </div>
+    </div>
+
+    {% if emp.certifications or emp.education %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-mortarboard"></i> Εκπαίδευση & Πιστοποιήσεις</div>
+      <div class="card-body" style="font-size:13px">
+        {% if emp.education %}<div class="mb-2"><strong>Εκπαίδευση:</strong><br>{{ emp.education }}</div>{% endif %}
+        {% if emp.certifications %}<div><strong>Πιστοποιήσεις:</strong><br>{{ emp.certifications }}</div>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if emp.skills %}
+    <div class="card">
+      <div class="card-header"><i class="bi bi-star"></i> Δεξιότητες</div>
+      <div class="card-body">
+        {% for skill in emp.skills.split(',') %}
+        <span class="badge bg-primary me-1 mb-1">{{ skill.strip() }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+    <!-- Contract & Leave -->
+    <div class="card mb-3">
+      <div class="card-header justify-content-between">
+        <span><i class="bi bi-file-earmark-text"></i> Σύμβαση Εργασίας</span>
+        {% if current_user.role in ('admin', 'manager') %}
+        <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#contractModal">
+          <i class="bi bi-upload"></i>
+        </button>
+        {% endif %}
+      </div>
+      <div class="card-body" style="font-size:13px">
+        {% if emp.contract_file_path %}
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <i class="bi bi-file-earmark-pdf text-danger fs-5"></i>
+          <span>{{ emp.contract_file_name or 'Σύμβαση' }}</span>
+        </div>
+        <a href="{{ url_for('hr.view_contract', id=emp.id) }}" target="_blank"
+           class="btn btn-sm btn-outline-primary w-100">
+          <i class="bi bi-eye me-1"></i>Προβολή PDF
+        </a>
+        {% else %}
+        <p class="text-muted mb-2">Δεν έχει ανεβεί σύμβαση.</p>
+        {% if current_user.role in ('admin', 'manager') %}
+        <button class="btn btn-sm btn-outline-secondary w-100" data-bs-toggle="modal" data-bs-target="#contractModal">
+          <i class="bi bi-upload me-1"></i>Ανέβασμα
+        </button>
+        {% endif %}
+        {% endif %}
+
+        <hr class="my-2">
+        <div class="d-flex justify-content-between">
+          <span class="text-muted">Ετήσιες Άδειες:</span>
+          <strong>{{ emp.annual_leave_days or 20 }} ημέρες</strong>
+        </div>
+        {% set year = today.year %}
+        {% set bal = emp.leave_balances.filter_by(year=year).first() %}
+        {% if bal %}
+        <div class="d-flex justify-content-between mt-1">
+          <span class="text-muted">Χρησιμοποιήθηκαν {{ year }}:</span>
+          <strong>{{ bal.used_days }} ημέρες</strong>
+        </div>
+        <div class="d-flex justify-content-between mt-1">
+          <span class="text-muted">Υπόλοιπο:</span>
+          <strong class="{% if (bal.total_days - bal.used_days) <= 3 %}text-danger{% else %}text-success{% endif %}">
+            {{ bal.total_days - bal.used_days }} ημέρες
+          </strong>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: CVs + assignments -->
+  <div class="col-lg-8">
+    <!-- CV management -->
+    <div class="card mb-3">
+      <div class="card-header justify-content-between">
+        <span><i class="bi bi-file-person"></i> Βιογραφικά Σημειώματα ({{ cvs|length }})</span>
+        <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#uploadCVModal">
+          <i class="bi bi-upload me-1"></i>Ανέβασμα CV
+        </button>
+      </div>
+      {% if cvs %}
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Έκδοση</th><th>Γλώσσα</th><th>Διαγωνισμός</th><th>Στάλθηκε σε</th><th>Ημ. Αποστολής</th><th>Σημειώσεις</th><th></th></tr></thead>
+          <tbody>
+            {% for cv in cvs %}
+            <tr>
+              <td><span class="badge bg-secondary">{{ cv.version }}</span></td>
+              <td>{{ cv.language }}</td>
+              <td>{% if cv.tender %}<a href="{{ url_for('tenders.detail', id=cv.tender_id) }}" style="font-size:12px">{{ cv.tender.title[:30] }}…</a>{% else %}—{% endif %}</td>
+              <td>{{ cv.sent_to or '—' }}</td>
+              <td>{{ cv.sent_at.strftime('%d/%m/%Y') if cv.sent_at else '—' }}</td>
+              <td><small class="text-muted">{{ cv.notes or '—' }}</small></td>
+              <td>
+                {% if cv.file_path %}
+                <a href="{{ url_for('static', filename='uploads/' + cv.file_path) }}" class="btn btn-sm btn-outline-primary" target="_blank"><i class="bi bi-download"></i></a>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-center text-muted py-4">
+        <i class="bi bi-file-person fs-2 opacity-25 d-block mb-2"></i>
+        Δεν υπάρχουν βιογραφικά. Ανεβάστε το πρώτο CV.
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Certifications -->
+    {% set certs = emp.certifications_files.all() %}
+    <div class="card mb-3">
+      <div class="card-header justify-content-between">
+        <span><i class="bi bi-patch-check"></i> Πιστοποιητικά & Έγγραφα ({{ certs|length }})</span>
+        <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#uploadCertModal">
+          <i class="bi bi-upload me-1"></i>Ανέβασμα Εγγράφου
+        </button>
+      </div>
+      {% if certs %}
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr><th>Τίτλος</th><th>Τύπος</th><th>Εκδότης</th><th>Έκδοση</th><th>Λήξη</th><th>Drive</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for c in certs %}
+            {% set cert_labels = {'degree':'Πτυχίο','license':'Άδεια','cv':'Βιογραφικό','training':'Επιμόρφωση','other':'Άλλο'} %}
+            {% set expired = c.expiry_date and c.expiry_date < today %}
+            <tr class="{{ 'table-danger' if expired else '' }}">
+              <td class="fw-semibold">{{ c.name }}</td>
+              <td><span class="badge bg-primary">{{ cert_labels.get(c.cert_type, c.cert_type) }}</span></td>
+              <td class="text-muted small">{{ c.issuer or '—' }}</td>
+              <td class="small">{{ c.issue_date.strftime('%d/%m/%Y') if c.issue_date else '—' }}</td>
+              <td class="small {{ 'text-danger fw-bold' if expired else '' }}">
+                {{ c.expiry_date.strftime('%d/%m/%Y') if c.expiry_date else '—' }}
+                {% if expired %}<br><span class="badge bg-danger">ΕΛΗΞΕ</span>{% endif %}
+              </td>
+              <td>
+                {% if c.drive_file_id %}
+                <i class="bi bi-cloud-check text-success" title="Αποθηκεύτηκε στο Drive"></i>
+                {% else %}
+                <i class="bi bi-cloud-slash text-muted" title="Δεν υπάρχει στο Drive"></i>
+                {% endif %}
+              </td>
+              <td>
+                <div class="btn-group btn-group-sm">
+                  {% if c.file_path %}
+                  <a href="{{ url_for('hr.view_certification', id=emp.id, cert_id=c.id) }}"
+                     class="btn btn-outline-primary" target="_blank" title="Προβολή">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                  {% endif %}
+                  <form method="post" action="{{ url_for('hr.delete_certification', id=emp.id, cert_id=c.id) }}" class="d-inline"
+                        onsubmit="return confirm('Διαγραφή εγγράφου;')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-danger" title="Διαγραφή">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-center text-muted py-4">
+        <i class="bi bi-patch-check fs-2 opacity-25 d-block mb-2"></i>
+        Δεν υπάρχουν ανεβασμένα έγγραφα. Προσθέστε πτυχίο, άδεια επαγγέλματος, βιογραφικό κ.ά.
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Upload Certification Modal -->
+    <div class="modal fade" id="uploadCertModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <form method="POST" action="{{ url_for('hr.upload_certification', id=emp.id) }}" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-header">
+              <h5 class="modal-title"><i class="bi bi-patch-check me-2"></i>Ανέβασμα Πιστοποιητικού / Εγγράφου</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body row g-3">
+              <div class="col-12">
+                <label class="form-label fw-semibold">Αρχείο *</label>
+                <input type="file" name="cert_file" class="form-control"
+                       accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" required>
+                <div class="form-text">PDF, Word, ή εικόνα (JPEG/PNG)</div>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Τίτλος Εγγράφου *</label>
+                <input type="text" name="cert_name" class="form-control"
+                       placeholder="π.χ. Πτυχίο Συντήρησης Έργων Τέχνης" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Τύπος Εγγράφου</label>
+                <select name="cert_type" class="form-select">
+                  <option value="degree">Πτυχίο / Δίπλωμα</option>
+                  <option value="license">Άδεια Άσκησης Επαγγέλματος</option>
+                  <option value="cv">Βιογραφικό Σημείωμα</option>
+                  <option value="training">Πιστοποιητικό Επιμόρφωσης</option>
+                  <option value="other">Άλλο Έγγραφο</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Εκδότης</label>
+                <input type="text" name="issuer" class="form-control"
+                       placeholder="π.χ. Πανεπιστήμιο Αθηνών">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Ημ. Έκδοσης</label>
+                <input type="date" name="issue_date" class="form-control">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Ημ. Λήξης</label>
+                <input type="date" name="expiry_date" class="form-control">
+              </div>
+              <div class="col-12">
+                <label class="form-label">Σημειώσεις</label>
+                <textarea name="notes" class="form-control" rows="2"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button>
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-upload me-1"></i>Αποθήκευση
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Project assignments -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-building"></i> Συμμετοχή σε Έργα</div>
+      {% if emp.project_assignments %}
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Έργο</th><th>Ρόλος</th><th>Από</th><th>Ημ. Κόστος</th></tr></thead>
+          <tbody>
+            {% for a in emp.project_assignments %}
+            <tr>
+              <td><a href="{{ url_for('projects.detail', id=a.project_id) }}" class="fw-semibold">{{ a.project.code }}</a><br><small class="text-muted">{{ a.project.title[:40] }}</small></td>
+              <td>{{ a.role or '—' }}</td>
+              <td>{{ a.start_date.strftime('%d/%m/%Y') if a.start_date else '—' }}</td>
+              <td>{% if a.daily_rate %}{{ '{:,.0f}'.format(a.daily_rate|float) }}€{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-center text-muted py-3">Δεν υπάρχουν αναθέσεις σε έργα.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Upload CV Modal -->
+<div class="modal fade" id="uploadCVModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('hr.upload_cv', id=emp.id) }}" enctype="multipart/form-data">
+        <div class="modal-header"><h5 class="modal-title"><i class="bi bi-upload me-2"></i>Ανέβασμα Βιογραφικού</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body row g-3">
+          <div class="col-12">
+            <label class="form-label">Αρχείο CV *</label>
+            <input type="file" name="cv_file" class="form-control" accept=".pdf,.doc,.docx" required>
+          </div>
+          <div class="col-md-6"><label class="form-label">Έκδοση</label><input type="text" name="version" class="form-control" value="v1.0"></div>
+          <div class="col-md-6">
+            <label class="form-label">Γλώσσα</label>
+            <select name="language" class="form-select"><option>Ελληνικά</option><option>Αγγλικά</option><option>Γαλλικά</option><option>Γερμανικά</option></select>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Σχετικός Διαγωνισμός</label>
+            <select name="tender_id" class="form-select">
+              <option value="">— Κανένας —</option>
+              {% for t in tenders %}<option value="{{ t.id }}">{{ t.title[:60] }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-12"><label class="form-label">Στάλθηκε σε</label><input type="text" name="sent_to" class="form-control" placeholder="π.χ. ΕΦΑ Αττικής"></div>
+          <div class="col-md-6"><label class="form-label">Ημ. Αποστολής</label><input type="date" name="sent_at" class="form-control"></div>
+          <div class="col-12"><label class="form-label">Σημειώσεις</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-upload me-1"></i>Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Contract Upload Modal -->
+<div class="modal fade" id="contractModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('hr.upload_contract', id=emp.id) }}" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-file-earmark-text me-2"></i>Σύμβαση Εργασίας</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body row g-3">
+          <div class="col-12">
+            <label class="form-label fw-semibold">Αρχείο Σύμβασης *</label>
+            <input type="file" name="contract_file" class="form-control" accept=".pdf,.doc,.docx" required>
+            <div class="form-text">PDF ή Word</div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Ημέρες Κανονικής Άδειας / Έτος</label>
+            <input type="number" name="annual_leave_days" class="form-control"
+                   value="{{ emp.annual_leave_days or 20 }}" min="0" max="60">
+            <div class="form-text">Συνήθως 20 εργάσιμες για πλήρη απασχόληση</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-upload me-1"></i>Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('hr.edit', id=emp.id) }}">
+        <div class="modal-header"><h5 class="modal-title">Επεξεργασία: {{ emp.full_name }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body row g-3">
+          <div class="col-md-6"><label class="form-label">Επώνυμο</label><input type="text" name="last_name" class="form-control" value="{{ emp.last_name }}" required></div>
+          <div class="col-md-6"><label class="form-label">Όνομα</label><input type="text" name="first_name" class="form-control" value="{{ emp.first_name }}" required></div>
+          <div class="col-md-6"><label class="form-label">Τηλέφωνο</label><input type="text" name="phone" class="form-control" value="{{ emp.phone or '' }}"></div>
+          <div class="col-md-6"><label class="form-label">Email</label><input type="email" name="email" class="form-control" value="{{ emp.email or '' }}"></div>
+          <div class="col-md-4">
+            <label class="form-label">Ειδικότητα</label>
+            <select name="specialty" class="form-select">{% for s in ['Συντηρητής Έργων Τέχνης','Αρχαιολόγος','Χημικός','Αρχιτέκτονας','Πολιτικός Μηχανικός','Εργάτης Συντήρησης','Οδηγός','Διοικητικός','Λογιστής','Άλλο'] %}<option {% if emp.specialty==s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Τύπος</label>
+            <select name="employment_type" class="form-select">
+              {% for v, l in [('full-time','Πλήρης'),('part-time','Μερική'),('freelance','Freelance'),('seasonal','Εποχιακός')] %}
+              <option value="{{ v }}" {% if emp.employment_type==v %}selected{% endif %}>{{ l }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Κατάσταση</label>
+            <select name="status" class="form-select">
+              {% for v, l in [('active','Ενεργός'),('on_leave','Σε Άδεια'),('inactive','Ανενεργός'),('terminated','Απολύθηκε')] %}
+              <option value="{{ v }}" {% if emp.status==v %}selected{% endif %}>{{ l }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6"><label class="form-label">Μισθός (€)</label><input type="number" name="basic_salary" class="form-control" step="0.01" value="{{ emp.basic_salary or '' }}"></div>
+          <div class="col-md-6"><label class="form-label">IBAN</label><input type="text" name="iban" class="form-control" value="{{ emp.iban or '' }}"></div>
+          <div class="col-12"><label class="form-label">Δεξιότητες</label><input type="text" name="skills" class="form-control" value="{{ emp.skills or '' }}"></div>
+          <div class="col-12"><label class="form-label">Πιστοποιήσεις</label><textarea name="certifications" class="form-control" rows="2">{{ emp.certifications or '' }}</textarea></div>
+          <div class="col-12"><label class="form-label">Σημειώσεις</label><textarea name="notes" class="form-control" rows="2">{{ emp.notes or '' }}</textarea></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button>
+          <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Χρήστες — ERP{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Χρήστες</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-people me-2 text-primary"></i>Διαχείριση Χρηστών</h1>
+    <p class="page-subtitle">Πρόσβαση και Δικαιώματα Συστήματος</p>
+  </div>
+  <a href="{{ url_for('auth.new_user') }}" class="btn btn-gold">
+    <i class="bi bi-person-plus me-1"></i>Νέος Χρήστης
+  </a>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr>
+        <th>Χρήστης</th><th>Email</th><th>Ρόλος</th><th>Συνδεδεμένος Υπάλληλος</th><th>Δημιουργία</th><th>Κατάσταση</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center text-white fw-bold"
+                   style="width:36px;height:36px;font-size:14px;flex-shrink:0">
+                {{ u.username[0].upper() }}
+              </div>
+              <div>
+                <div class="fw-semibold">{{ u.username }}</div>
+                {% if u.full_name %}<small class="text-muted">{{ u.full_name }}</small>{% endif %}
+              </div>
+            </div>
+          </td>
+          <td>{{ u.email or '—' }}</td>
+          <td>
+            <span class="badge {% if u.role=='admin' %}bg-danger{% elif u.role=='manager' %}bg-primary{% elif u.role=='worker' %}bg-success{% else %}bg-secondary{% endif %}">
+              {{ {'admin':'Διαχειριστής','manager':'Υπεύθυνος','user':'Χρήστης','worker':'Εργαζόμενος'}.get(u.role, u.role) }}
+            </span>
+          </td>
+          <td>
+            {% if u.employee %}
+            <small>{{ u.employee.full_name }}</small>
+            {% else %}
+            <small class="text-muted">—</small>
+            {% endif %}
+          </td>
+          <td><small>{{ u.created_at.strftime('%d/%m/%Y') if u.created_at else '—' }}</small></td>
+          <td>
+            <span class="badge {% if u.is_active %}status-active{% else %}bg-secondary{% endif %}">
+              {{ 'Ενεργός' if u.is_active else 'Ανενεργός' }}
+            </span>
+          </td>
+          <td>
+            <div class="d-flex gap-1">
+              <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal"
+                      data-bs-target="#editModal{{ u.id }}" title="Επεξεργασία">
+                <i class="bi bi-pencil"></i>
+              </button>
+              {% if u.id != current_user.id %}
+              <form method="POST" action="{{ url_for('auth.delete_user', id=u.id) }}" class="d-inline">
+                <button class="btn btn-sm btn-outline-danger"
+                        data-confirm="Διαγραφή χρήστη {{ u.username }};" title="Διαγραφή">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+              {% else %}
+              <small class="text-muted ms-1">Εσείς</small>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+
+        <!-- Edit Modal for each user -->
+        <div class="modal fade" id="editModal{{ u.id }}" tabindex="-1">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <form method="POST" action="{{ url_for('auth.edit_user', id=u.id) }}">
+                <div class="modal-header">
+                  <h5 class="modal-title">
+                    <i class="bi bi-person-gear me-2"></i>Επεξεργασία: {{ u.username }}
+                  </h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                  <div class="row g-3">
+                    <div class="col-12">
+                      <label class="form-label">Username</label>
+                      <input type="text" class="form-control" value="{{ u.username }}" disabled>
+                      <div class="form-text">Το username δεν αλλάζει.</div>
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label">Πλήρες Όνομα</label>
+                      <input type="text" name="full_name" class="form-control"
+                             value="{{ u.full_name or '' }}">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label">Email</label>
+                      <input type="email" name="email" class="form-control"
+                             value="{{ u.email or '' }}">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label">Ρόλος</label>
+                      <select name="role" class="form-select"
+                              {% if u.id == current_user.id %}disabled{% endif %}>
+                        <option value="admin"   {% if u.role=='admin'   %}selected{% endif %}>Διαχειριστής</option>
+                        <option value="manager" {% if u.role=='manager' %}selected{% endif %}>Υπεύθυνος</option>
+                        <option value="user"    {% if u.role=='user'    %}selected{% endif %}>Χρήστης</option>
+                        <option value="worker"  {% if u.role=='worker'  %}selected{% endif %}>Εργαζόμενος</option>
+                      </select>
+                      {% if u.id == current_user.id %}
+                      <input type="hidden" name="role" value="{{ u.role }}">
+                      <div class="form-text">Δεν μπορείτε να αλλάξετε τον δικό σας ρόλο.</div>
+                      {% endif %}
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label">Κατάσταση</label>
+                      <select name="is_active" class="form-select"
+                              {% if u.id == current_user.id %}disabled{% endif %}>
+                        <option value="1" {% if u.is_active %}selected{% endif %}>Ενεργός</option>
+                        <option value="0" {% if not u.is_active %}selected{% endif %}>Ανενεργός</option>
+                      </select>
+                      {% if u.id == current_user.id %}
+                      <input type="hidden" name="is_active" value="1">
+                      {% endif %}
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label">Συνδεδεμένος Υπάλληλος</label>
+                      <select name="employee_id" class="form-select">
+                        <option value="">— Κανένας —</option>
+                        {% for emp in employees %}
+                        <option value="{{ emp.id }}"
+                                {% if u.employee_id == emp.id %}selected{% endif %}>
+                          {{ emp.full_name }} ({{ emp.specialty or '—' }})
+                        </option>
+                        {% endfor %}
+                      </select>
+                      <div class="form-text">Απαιτείται για τους ρόλους "Εργαζόμενος" ώστε να βλέπουν τα δεδομένα τους.</div>
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label">Νέος Κωδικός</label>
+                      <input type="password" name="new_password" class="form-control"
+                             placeholder="Αφήστε κενό για να μη αλλάξει" autocomplete="new-password">
+                      <div class="form-text">Τουλάχιστον 8 χαρακτήρες. Κενό = χωρίς αλλαγή.</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Ακύρωση</button>
+                  <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="bi bi-check-lg me-1"></i>Αποθήκευση
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Τιμολόγια — ERP{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Τιμολόγια</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-receipt-cutoff me-2 text-primary"></i>Τιμολόγια</h1>
+    <p class="page-subtitle">Εισπράξεις, Δαπάνες, Παρακολούθηση Πληρωμών</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('invoices.import_list') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-file-earmark-spreadsheet me-1"></i>Εισαγωγή Λίστας
+    </a>
+    <a href="{{ url_for('invoices.upload') }}" class="btn btn-gold"><i class="bi bi-plus-lg me-1"></i>Νέο Τιμολόγιο</a>
+  </div>
+</div>
+
+<!-- Summary cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon green"><i class="bi bi-arrow-down-circle"></i></div>
+      <div><div class="kpi-value" style="font-size:20px">{{ '{:,.2f}'.format(total_income) }}€</div><div class="kpi-label">Σύνολο Εσόδων</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon red"><i class="bi bi-arrow-up-circle"></i></div>
+      <div><div class="kpi-value" style="font-size:20px">{{ '{:,.2f}'.format(total_expense) }}€</div><div class="kpi-label">Σύνολο Εξόδων</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon {% if total_income - total_expense >= 0 %}green{% else %}red{% endif %}"><i class="bi bi-graph-up-arrow"></i></div>
+      <div>
+        <div class="kpi-value" style="font-size:20px; color:{% if total_income - total_expense >= 0 %}#16a34a{% else %}#dc2626{% endif %}">
+          {{ '{:,.2f}'.format(total_income - total_expense) }}€
+        </div>
+        <div class="kpi-label">Καθαρό Αποτέλεσμα</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon orange"><i class="bi bi-exclamation-triangle"></i></div>
+      <div><div class="kpi-value">{{ overdue|length }}</div><div class="kpi-label">Ληξιπρόθεσμα</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="toolbar">
+  <form method="GET" class="d-flex gap-2 flex-wrap align-items-center w-100">
+    <div class="search-box">
+      <i class="bi bi-search"></i>
+      <input name="q" class="form-control form-control-sm" placeholder="Αρ. τιμολογίου, εκδότης…" value="{{ q }}">
+    </div>
+    <select name="type" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <option value="">Τύπος</option>
+      <option value="income" {% if inv_type=='income' %}selected{% endif %}>Έσοδα</option>
+      <option value="expense" {% if inv_type=='expense' %}selected{% endif %}>Έξοδα</option>
+    </select>
+    <select name="status" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <option value="">Κατάσταση</option>
+      <option value="pending" {% if status=='pending' %}selected{% endif %}>Εκκρεμεί</option>
+      <option value="paid" {% if status=='paid' %}selected{% endif %}>Πληρωμένο</option>
+      <option value="overdue" {% if status=='overdue' %}selected{% endif %}>Ληξιπρόθεσμο</option>
+    </select>
+    <select name="project_id" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <option value="">Όλα τα Έργα</option>
+      {% for p in projects %}
+      <option value="{{ p.id }}" {% if project_id==p.id|string %}selected{% endif %}>{{ p.code }} — {{ p.title[:30] }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-search"></i></button>
+    <a href="{{ url_for('invoices.index') }}" class="btn btn-sm btn-outline-secondary">Καθαρισμός</a>
+  </form>
+</div>
+
+<!-- Overdue alert -->
+{% if overdue %}
+<div class="alert alert-danger d-flex align-items-center gap-2 mb-3">
+  <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+  <strong>{{ overdue|length }} ληξιπρόθεσμα τιμολόγια</strong> — χρειάζεται άμεση ενέργεια.
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr>
+        <th>Αρ. Τιμολογίου</th><th>Τύπος</th><th>Εκδότης / Λήπτης</th><th>Ημ. Τιμολογίου</th>
+        <th>Καθαρό</th><th>ΦΠΑ</th><th>Σύνολο</th><th>Κατηγορία</th><th>Έργο</th><th>Κατάσταση</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for inv in invoices %}
+        <tr {% if inv.is_overdue %}class="table-danger"{% endif %}>
+          <td>
+            <strong>{{ inv.invoice_number or '—' }}</strong>
+            {% if inv.image_path %}
+            <a href="{{ url_for('static', filename='uploads/' + inv.image_path) }}" target="_blank" class="ms-1" title="Εικόνα">
+              <i class="bi bi-image text-primary"></i>
+            </a>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge {% if inv.invoice_type=='income' %}bg-success{% else %}bg-danger{% endif %}">
+              {% if inv.invoice_type=='income' %}<i class="bi bi-arrow-down"></i> Έσοδο{% else %}<i class="bi bi-arrow-up"></i> Έξοδο{% endif %}
+            </span>
+          </td>
+          <td class="text-truncate" style="max-width:160px">{{ inv.issuer or inv.recipient or '—' }}</td>
+          <td>{{ inv.invoice_date.strftime('%d/%m/%Y') if inv.invoice_date else '—' }}</td>
+          <td>{{ '{:,.2f}'.format(inv.amount_net|float) if inv.amount_net else '—' }}€</td>
+          <td class="text-muted">{{ '{:,.2f}'.format(inv.vat_amount|float) if inv.vat_amount else '—' }}€</td>
+          <td class="fw-bold {% if inv.invoice_type=='income' %}text-success{% else %}text-danger{% endif %}">
+            {{ '{:,.2f}'.format(inv.total_amount|float) }}€
+          </td>
+          <td><small class="text-muted">{{ inv.category or '—' }}</small></td>
+          <td><small>{{ inv.project.code if inv.project else '—' }}</small></td>
+          <td>
+            <span class="badge status-{{ inv.payment_status }}">
+              {{ 'Πληρωμένο' if inv.payment_status=='paid' else 'Εκκρεμεί' if inv.payment_status=='pending' else 'Ληξιπρόθεσμο' if inv.payment_status=='overdue' else inv.payment_status }}
+            </span>
+            {% if inv.due_date and inv.payment_status != 'paid' %}
+            <div style="font-size:11px" class="text-muted">έως {{ inv.due_date.strftime('%d/%m/%Y') }}</div>
+            {% endif %}
+          </td>
+          <td>
+            <div class="d-flex gap-1">
+              <a href="{{ url_for('invoices.detail', id=inv.id) }}" class="btn btn-sm btn-outline-secondary" title="Λεπτομέρειες">
+                <i class="bi bi-eye"></i>
+              </a>
+              {% if inv.payment_status != 'paid' %}
+              <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#payModal{{ inv.id }}" title="Σήμανση Πληρωμής">
+                <i class="bi bi-check2"></i>
+              </button>
+              {% endif %}
+              <form method="POST" action="{{ url_for('invoices.delete', id=inv.id) }}">
+                <button class="btn btn-sm btn-outline-danger" data-confirm="Διαγραφή τιμολογίου;"><i class="bi bi-trash"></i></button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="11">
+          <div class="empty-state">
+            <i class="bi bi-receipt d-block"></i>
+            <h5>Δεν υπάρχουν τιμολόγια</h5>
+            <a href="{{ url_for('invoices.upload') }}" class="btn btn-primary mt-2">Καταχώρηση Τιμολογίου</a>
+          </div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Pay modals -->
+{% for inv in invoices %}
+{% if inv.payment_status != 'paid' %}
+<div class="modal fade" id="payModal{{ inv.id }}" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('invoices.mark_paid', id=inv.id) }}">
+        <div class="modal-header"><h6 class="modal-title">Σήμανση Πληρωμής</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <p class="mb-2">{{ inv.invoice_number or '#'+inv.id|string }} — <strong>{{ '{:,.2f}'.format(inv.total_amount|float) }}€</strong></p>
+          <label class="form-label">Τρόπος Πληρωμής</label>
+          <select name="payment_method" class="form-select">
+            <option>Τραπεζική Μεταφορά</option><option>Μετρητά</option><option>Επιταγή</option><option>Κάρτα</option>
+          </select>
+        </div>
+        <div class="modal-footer"><button type="submit" class="btn btn-success w-100"><i class="bi bi-check2 me-1"></i>Επιβεβαίωση Πληρωμής</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endblock %}

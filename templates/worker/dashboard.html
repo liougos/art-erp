@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Πύλη Εργαζομένου — ERP{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Πύλη Εργαζομένου</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-person-workspace me-2 text-primary"></i>
+      {% if emp %}Γεια σου, {{ emp.first_name }}!{% else %}Πύλη Εργαζομένου{% endif %}
+    </h1>
+    <p class="page-subtitle">{{ today.strftime('%A, %d %B %Y') if today else '' }}</p>
+  </div>
+  {% if emp %}
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('worker.my_leaves') }}" class="btn btn-outline-primary">
+      <i class="bi bi-calendar-week me-1"></i>Άδειες
+    </a>
+    <a href="{{ url_for('worker.new_report') }}" class="btn btn-gold">
+      <i class="bi bi-plus-lg me-1"></i>Νέα Αναφορά
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+{% if not emp and current_user.role == 'worker' %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle me-2"></i>
+  Ο λογαριασμός σας δεν έχει συνδεθεί με υπάλληλο. Επικοινωνήστε με τον διαχειριστή.
+</div>
+{% endif %}
+
+<!-- KPIs -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon blue"><i class="bi bi-folder2-open"></i></div>
+      <div><div class="kpi-value">{{ assignments|length }}</div><div class="kpi-label">Έργα μου</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon green"><i class="bi bi-check2-circle"></i></div>
+      <div><div class="kpi-value">{{ today_reports|length }}</div><div class="kpi-label">Αναφορές Σήμερα</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon orange"><i class="bi bi-clock-history"></i></div>
+      <div><div class="kpi-value">{{ reports|selectattr('status','eq','pending')|list|length }}</div><div class="kpi-label">Εκκρεμείς</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon green"><i class="bi bi-hand-thumbs-up"></i></div>
+      <div><div class="kpi-value">{{ reports|selectattr('status','eq','approved')|list|length }}</div><div class="kpi-label">Εγκεκριμένες</div></div>
+    </div>
+  </div>
+</div>
+
+{% if emp %}
+<div class="row g-3 mb-4">
+  {% set year = today.year %}
+  {% set bal = emp.leave_balances.filter_by(year=year).first() %}
+  {% set total_leave = (bal.total_days if bal else emp.annual_leave_days) or 20 %}
+  {% set used_leave = bal.used_days if bal else 0 %}
+  {% set remaining_leave = total_leave - used_leave %}
+  <div class="col-6 col-md-3">
+    <a href="{{ url_for('worker.my_leaves') }}" class="text-decoration-none">
+      <div class="kpi-card">
+        <div class="kpi-icon {% if remaining_leave <= 3 %}red{% elif remaining_leave <= 7 %}orange{% else %}blue{% endif %}">
+          <i class="bi bi-calendar-check"></i>
+        </div>
+        <div>
+          <div class="kpi-value">{{ remaining_leave }}</div>
+          <div class="kpi-label">Υπόλοιπο Αδειών {{ year }}</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% if emp.contract_file_path %}
+  <div class="col-6 col-md-3">
+    <a href="{{ url_for('worker.view_contract') }}" target="_blank" class="text-decoration-none">
+      <div class="kpi-card">
+        <div class="kpi-icon green"><i class="bi bi-file-earmark-text"></i></div>
+        <div><div class="kpi-value" style="font-size:14px">Σύμβαση</div><div class="kpi-label">Προβολή PDF</div></div>
+      </div>
+    </a>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="row g-3">
+  <!-- My Projects -->
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-folder2 text-primary"></i> Τα Έργα μου</div>
+      <div class="list-group list-group-flush">
+        {% for a in assignments %}
+        <div class="list-group-item">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="fw-semibold">{{ a.project.code }}</div>
+              <small class="text-muted">{{ a.project.title[:50] }}</small>
+              {% if a.role %}<br><span class="badge bg-light text-dark border" style="font-size:11px">{{ a.role }}</span>{% endif %}
+            </div>
+            <div class="text-end">
+              <span class="badge {% if a.project.status=='active' %}status-active{% elif a.project.status=='completed' %}bg-secondary{% else %}status-pending{% endif %}">
+                {{ {'active':'Ενεργό','completed':'Ολοκληρ.','paused':'Παύση','planning':'Σχεδιασμός'}.get(a.project.status, a.project.status) }}
+              </span>
+              {% if a.project.location %}
+              <br><small class="text-muted"><i class="bi bi-geo-alt me-1"></i>{{ a.project.location }}</small>
+              {% endif %}
+            </div>
+          </div>
+          <div class="mt-2">
+            <a href="{{ url_for('worker.new_report') }}?project_id={{ a.project_id }}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-plus me-1"></i>Αναφορά
+            </a>
+          </div>
+        </div>
+        {% else %}
+        <div class="list-group-item text-center text-muted py-4">
+          <i class="bi bi-folder2 d-block fs-2 opacity-25 mb-2"></i>
+          Δεν έχετε ανατεθεί σε έργα
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent reports -->
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-journal-text text-primary"></i> Πρόσφατες Αναφορές</span>
+        {% if current_user.role in ('admin', 'manager') %}
+        <a href="{{ url_for('worker.all_reports') }}" class="btn btn-sm btn-outline-secondary">Όλες</a>
+        {% endif %}
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th>Ημ/νία</th><th>Έργο</th><th>Εργασίες</th><th>Ώρες</th><th>Κατάσταση</th><th></th></tr></thead>
+          <tbody>
+            {% for r in reports %}
+            <tr>
+              <td><small>{{ r.report_date.strftime('%d/%m/%Y') }}</small></td>
+              <td><span class="fw-semibold" style="font-size:12px">{{ r.project.code }}</span></td>
+              <td class="text-truncate" style="max-width:200px"><small>{{ r.work_done[:60] }}…</small></td>
+              <td><small>{{ r.hours_worked }}h</small></td>
+              <td>
+                <span class="badge {% if r.status=='approved' %}status-active{% elif r.status=='rejected' %}bg-danger{% else %}status-pending{% endif %}" style="font-size:10px">
+                  {{ {'pending':'Εκκρεμεί','approved':'Εγκρίθηκε','rejected':'Απορρίφθηκε'}.get(r.status, r.status) }}
+                </span>
+              </td>
+              <td><a href="{{ url_for('worker.view_report', id=r.id) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-center text-muted py-3">Δεν υπάρχουν αναφορές ακόμη</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

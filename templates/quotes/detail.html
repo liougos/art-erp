@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}{{ quote.title }} — ART ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('quotes.index') }}">Προσφορές</a></li>
+<li class="breadcrumb-item active">{{ quote.title }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h2 class="page-title mb-1">{{ quote.title }}</h2>
+    <span class="badge bg-{{ quote.status_color }} fs-6">{{ quote.status_label }}</span>
+    {% if quote.is_expired %}<span class="badge bg-danger ms-2">Ληγμένη</span>{% endif %}
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    {% if current_user.role in ('admin','manager') and not quote.converted_project_id %}
+    <form method="post" action="{{ url_for('quotes.convert_to_project', id=quote.id) }}"
+          onsubmit="return confirm('Μετατροπή σε Έργο;')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-success btn-sm">
+        <i class="bi bi-arrow-right-circle me-1"></i>Μετατροπή σε Έργο
+      </button>
+    </form>
+    {% endif %}
+    {% if quote.converted_project_id %}
+    <a href="{{ url_for('projects.detail', id=quote.converted_project_id) }}" class="btn btn-outline-success btn-sm">
+      <i class="bi bi-building me-1"></i>Δες Έργο
+    </a>
+    {% endif %}
+    {% if current_user.role in ('admin','manager') %}
+    <form method="post" action="{{ url_for('quotes.delete', id=quote.id) }}"
+          onsubmit="return confirm('Διαγραφή προσφοράς;')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-trash"></i>
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Quote details -->
+  <div class="col-lg-8">
+    <!-- Line items -->
+    <div class="card card-dark mb-4">
+      <div class="card-header border-secondary"><h6 class="mb-0">Γραμμές Προσφοράς</h6></div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-dark mb-0">
+            <thead>
+              <tr>
+                <th>Περιγραφή</th>
+                <th class="text-end">Μον.</th>
+                <th class="text-end">Ποσ.</th>
+                <th class="text-end">Τιμή €</th>
+                <th class="text-end">ΦΠΑ%</th>
+                <th class="text-end">Σύνολο €</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in quote.items %}
+              <tr>
+                <td>{{ item.description }}</td>
+                <td class="text-end text-muted small">{{ item.unit }}</td>
+                <td class="text-end">{{ item.quantity }}</td>
+                <td class="text-end">{{ '%.2f'|format(item.unit_price|float) }} €</td>
+                <td class="text-end text-muted">{{ item.vat_rate }}%</td>
+                <td class="text-end fw-bold">{{ '%.2f'|format(item.line_total) }} €</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot class="border-top border-secondary">
+              <tr>
+                <td colspan="5" class="text-end text-muted">Καθαρή Αξία</td>
+                <td class="text-end">{{ '%.2f'|format(quote.subtotal) }} €</td>
+              </tr>
+              <tr>
+                <td colspan="5" class="text-end text-muted">ΦΠΑ</td>
+                <td class="text-end">{{ '%.2f'|format(quote.vat_total) }} €</td>
+              </tr>
+              <tr>
+                <td colspan="5" class="text-end fw-bold fs-5">Γενικό Σύνολο</td>
+                <td class="text-end fw-bold fs-5 text-warning">{{ '%.2f'|format(quote.grand_total) }} €</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Terms & Notes -->
+    {% if quote.terms or quote.notes %}
+    <div class="card card-dark">
+      <div class="card-body">
+        {% if quote.terms %}
+        <h6 class="text-muted mb-1">Όροι</h6>
+        <p class="mb-3" style="white-space:pre-line">{{ quote.terms }}</p>
+        {% endif %}
+        {% if quote.notes %}
+        <h6 class="text-muted mb-1">Σημειώσεις</h6>
+        <p class="mb-0" style="white-space:pre-line">{{ quote.notes }}</p>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Sidebar -->
+  <div class="col-lg-4">
+    <!-- Client info -->
+    <div class="card card-dark mb-3">
+      <div class="card-header border-secondary"><h6 class="mb-0">Πελάτης</h6></div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted">Επωνυμία</dt>
+          <dd class="col-7">{{ quote.client_name or '—' }}</dd>
+          <dt class="col-5 text-muted">ΑΦΜ</dt>
+          <dd class="col-7">{{ quote.client_afm or '—' }}</dd>
+          <dt class="col-5 text-muted">Email</dt>
+          <dd class="col-7">{{ quote.client_email or '—' }}</dd>
+          <dt class="col-5 text-muted">Τηλ.</dt>
+          <dd class="col-7">{{ quote.client_phone or '—' }}</dd>
+        </dl>
+      </div>
+    </div>
+
+    <!-- Dates -->
+    <div class="card card-dark mb-3">
+      <div class="card-header border-secondary"><h6 class="mb-0">Ημερομηνίες</h6></div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-6 text-muted">Έκδοση</dt>
+          <dd class="col-6">{{ quote.issue_date.strftime('%d/%m/%Y') if quote.issue_date else '—' }}</dd>
+          <dt class="col-6 text-muted">Ισχύς έως</dt>
+          <dd class="col-6 {% if quote.is_expired %}text-danger{% endif %}">
+            {{ quote.valid_until.strftime('%d/%m/%Y') if quote.valid_until else '—' }}
+          </dd>
+          {% if quote.tender %}
+          <dt class="col-6 text-muted">Διαγωνισμός</dt>
+          <dd class="col-6"><a href="{{ url_for('tenders.detail', id=quote.tender.id) }}" class="text-warning text-decoration-none">{{ quote.tender.title[:25] }}</a></dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <!-- Status update -->
+    <div class="card card-dark">
+      <div class="card-header border-secondary"><h6 class="mb-0">Αλλαγή Κατάστασης</h6></div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('quotes.update_status', id=quote.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-2">
+            <select name="status" class="form-select bg-dark text-white border-secondary">
+              <option value="draft" {% if quote.status=='draft' %}selected{% endif %}>Πρόχειρη</option>
+              <option value="sent" {% if quote.status=='sent' %}selected{% endif %}>Εστάλη</option>
+              <option value="accepted" {% if quote.status=='accepted' %}selected{% endif %}>Αποδεκτή</option>
+              <option value="rejected" {% if quote.status=='rejected' %}selected{% endif %}>Απορρίφθηκε</option>
+              <option value="expired" {% if quote.status=='expired' %}selected{% endif %}>Ληγμένη</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-gold w-100">Ενημέρωση</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

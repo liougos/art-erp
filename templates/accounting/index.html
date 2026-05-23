@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}Λογιστήριο — ERP{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Λογιστήριο</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-calculator me-2 text-primary"></i>Λογιστήριο</h1>
+    <p class="page-subtitle">Έσοδα, Έξοδα, Μισθοδοσία, Φορολογία</p>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <select class="form-select form-select-sm" style="width:auto" onchange="location.href='{{ url_for('accounting.index') }}?year='+this.value">
+      {% for y in years %}<option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-gold" data-bs-toggle="modal" data-bs-target="#addEntryModal">
+      <i class="bi bi-plus-lg me-1"></i>Νέα Εγγραφή
+    </button>
+  </div>
+</div>
+
+<!-- KPI Row -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon green"><i class="bi bi-arrow-down-circle"></i></div>
+      <div><div class="kpi-value" style="font-size:20px">{{ '{:,.0f}'.format(total_income) }}€</div><div class="kpi-label">Σύνολο Εσόδων {{ year }}</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon red"><i class="bi bi-arrow-up-circle"></i></div>
+      <div><div class="kpi-value" style="font-size:20px">{{ '{:,.0f}'.format(total_expense) }}€</div><div class="kpi-label">Λειτουργικά Έξοδα</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon orange"><i class="bi bi-people"></i></div>
+      <div><div class="kpi-value" style="font-size:20px">{{ '{:,.0f}'.format(total_payroll) }}€</div><div class="kpi-label">Μισθοδοσία</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon {% if net >= 0 %}green{% else %}red{% endif %}"><i class="bi bi-graph-up-arrow"></i></div>
+      <div>
+        <div class="kpi-value" style="font-size:20px; color:{% if net >= 0 %}#16a34a{% else %}#dc2626{% endif %}">{{ '{:,.0f}'.format(net) }}€</div>
+        <div class="kpi-label">Καθαρό Αποτέλεσμα</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Charts row -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-graph-up text-primary"></i> Μηνιαία Πορεία {{ year }}</div>
+      <div class="card-body"><div class="chart-container" style="height:220px"><canvas id="monthlyChart"></canvas></div></div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-pie-chart text-primary"></i> Έξοδα ανά Κατηγορία</div>
+      <div class="card-body"><div class="chart-container" style="height:220px"><canvas id="expenseCatChart"></canvas></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters + Table -->
+<div class="toolbar">
+  <form method="GET" class="d-flex gap-2 flex-wrap align-items-center w-100">
+    <input type="hidden" name="year" value="{{ year }}">
+    <select name="month" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <option value="">Όλοι οι Μήνες</option>
+      {% for m, mn in [(1,'Ιανουάριος'),(2,'Φεβρουάριος'),(3,'Μάρτιος'),(4,'Απρίλιος'),(5,'Μάιος'),(6,'Ιούνιος'),(7,'Ιούλιος'),(8,'Αύγουστος'),(9,'Σεπτέμβριος'),(10,'Οκτώβριος'),(11,'Νοέμβριος'),(12,'Δεκέμβριος')] %}
+      <option value="{{ m }}" {% if month==m|string %}selected{% endif %}>{{ mn }}</option>
+      {% endfor %}
+    </select>
+    <select name="type" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <option value="">Τύπος</option>
+      <option value="income" {% if entry_type=='income' %}selected{% endif %}>Έσοδα</option>
+      <option value="expense" {% if entry_type=='expense' %}selected{% endif %}>Έξοδα</option>
+      <option value="payroll" {% if entry_type=='payroll' %}selected{% endif %}>Μισθοδοσία</option>
+      <option value="tax" {% if entry_type=='tax' %}selected{% endif %}>Φόροι</option>
+    </select>
+    <select name="project_id" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <option value="">Όλα τα Έργα</option>
+      {% for p in projects %}<option value="{{ p.id }}" {% if project_id==p.id|string %}selected{% endif %}>{{ p.code }}</option>{% endfor %}
+    </select>
+    <a href="{{ url_for('accounting.index', year=year) }}" class="btn btn-sm btn-outline-secondary">Καθαρισμός</a>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr>
+        <th>Ημ/νία</th><th>Τύπος</th><th>Κατηγορία</th><th>Περιγραφή</th>
+        <th>Καθαρό</th><th>ΦΠΑ</th><th>Σύνολο</th><th>Έργο</th><th>Κατάσταση</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for e in entries %}
+        <tr>
+          <td>{{ e.entry_date.strftime('%d/%m/%Y') }}</td>
+          <td>
+            <span class="badge {% if e.entry_type=='income' %}bg-success{% elif e.entry_type=='expense' %}bg-danger{% elif e.entry_type=='payroll' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+              {{ {'income':'Έσοδο','expense':'Έξοδο','payroll':'Μισθοδοσία','tax':'Φόρος','transfer':'Μεταφορά'}.get(e.entry_type, e.entry_type) }}
+            </span>
+          </td>
+          <td><small>{{ e.category or '—' }}</small>{% if e.subcategory %}<br><small class="text-muted">{{ e.subcategory }}</small>{% endif %}</td>
+          <td class="text-truncate" style="max-width:200px">{{ e.description or '—' }}</td>
+          <td>{{ '{:,.2f}'.format(e.amount_net|float) if e.amount_net else '—' }}€</td>
+          <td class="text-muted">{{ '{:,.2f}'.format(e.vat_amount|float) if e.vat_amount else '—' }}€</td>
+          <td class="fw-bold {% if e.entry_type=='income' %}text-success{% elif e.entry_type in ('expense','payroll','tax') %}text-danger{% endif %}">
+            {{ '{:,.2f}'.format(e.total_amount|float) }}€
+          </td>
+          <td><small>{{ e.project.code if e.project else '—' }}</small></td>
+          <td><span class="badge {% if e.status=='confirmed' %}status-active{% elif e.status=='reconciled' %}bg-secondary{% else %}status-pending{% endif %}">
+            {{ {'pending':'Εκκρεμεί','confirmed':'Επιβεβαιωμένη','reconciled':'Συμφωνήθηκε'}.get(e.status, e.status) }}
+          </span></td>
+          <td>
+            <form method="POST" action="{{ url_for('accounting.delete', id=e.id) }}">
+              <button class="btn btn-sm btn-outline-danger" data-confirm="Διαγραφή εγγραφής;"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10"><div class="empty-state"><i class="bi bi-calculator d-block"></i><h5>Δεν υπάρχουν εγγραφές</h5></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add Entry Modal -->
+<div class="modal fade" id="addEntryModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('accounting.add') }}">
+        <div class="modal-header"><h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Νέα Λογιστική Εγγραφή</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body row g-3">
+          <div class="col-md-4"><label class="form-label">Ημ/νία *</label><input type="date" name="entry_date" class="form-control" required></div>
+          <div class="col-md-4">
+            <label class="form-label">Τύπος *</label>
+            <select name="entry_type" class="form-select" id="entryTypeSelect" onchange="updateCategories(this.value)">
+              <option value="income">Έσοδο</option>
+              <option value="expense" selected>Έξοδο</option>
+              <option value="payroll">Μισθοδοσία</option>
+              <option value="tax">Φόρος / Τέλη</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Κατηγορία</label>
+            <select name="category" class="form-select" id="categorySelect">
+              {% for c in expense_categories %}<option>{{ c }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-12"><label class="form-label">Υποκατηγορία / Περιγραφή</label><input type="text" name="subcategory" class="form-control"></div>
+          <div class="col-12"><label class="form-label">Αναλυτική Περιγραφή</label><input type="text" name="description" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label">Καθαρό Ποσό (€) *</label><input type="number" name="amount_net" class="form-control" step="0.01" required></div>
+          <div class="col-md-4"><label class="form-label">ΦΠΑ (€)</label><input type="number" name="vat_amount" class="form-control" step="0.01" value="0"></div>
+          <div class="col-md-4">
+            <label class="form-label">Έργο</label>
+            <select name="project_id" class="form-select">
+              <option value="">— Κανένα —</option>
+              {% for p in projects %}<option value="{{ p.id }}">{{ p.code }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6"><label class="form-label">Αναφορά / Παραστατικό</label><input type="text" name="reference" class="form-control" placeholder="π.χ. ΤΠΥ 1234"></div>
+          <div class="col-md-6">
+            <label class="form-label">Κατάσταση</label>
+            <select name="status" class="form-select">
+              <option value="pending">Εκκρεμεί</option>
+              <option value="confirmed">Επιβεβαιωμένη</option>
+              <option value="reconciled">Συμφωνήθηκε</option>
+            </select>
+          </div>
+          <div class="col-12"><label class="form-label">Σημειώσεις</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button><button type="submit" class="btn btn-primary">Αποθήκευση</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const monthlyData = {{ monthly | tojson }};
+const months = ['Ιαν','Φεβ','Μαρ','Απρ','Μαϊ','Ιουν','Ιουλ','Αυγ','Σεπ','Οκτ','Νοε','Δεκ'];
+buildLineChart('monthlyChart', months, monthlyData.map(d=>d.income), monthlyData.map(d=>d.expense));
+
+const catData = {{ cat_data | tojson }};
+const catColors = ['#2356a0','#16a34a','#d97706','#dc2626','#7c3aed','#0284c7','#64748b','#c9a84c','#059669','#9333ea'];
+if (catData.length) {
+  buildDoughnutChart('expenseCatChart', catData.map(d=>d[0]||'Άλλο'), catData.map(d=>parseFloat(d[1])), catColors);
+}
+
+const incCats = {{ income_categories | tojson }};
+const expCats = {{ expense_categories | tojson }};
+const taxCats = {{ tax_categories | tojson }};
+const payCats = ['Μισθοί','Εισφορές ΙΚΑ','Επιδόματα','Αποζημιώσεις'];
+
+function updateCategories(type) {
+  const sel = document.getElementById('categorySelect');
+  const maps = {income:incCats, expense:expCats, tax:taxCats, payroll:payCats};
+  const cats = maps[type] || expCats;
+  sel.innerHTML = cats.map(c=>`<option>${c}</option>`).join('');
+}
+</script>
+{% endblock %}

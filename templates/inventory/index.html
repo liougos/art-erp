@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+{% block title %}Αποθήκη Υλικών — ART ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Αποθήκη Υλικών</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h2 class="page-title mb-0"><i class="bi bi-box-seam me-2 text-warning"></i>Αποθήκη Υλικών</h2>
+  {% if current_user.role in ('admin','manager') %}
+  <button class="btn btn-gold" data-bs-toggle="modal" data-bs-target="#modalNew">
+    <i class="bi bi-plus-lg me-1"></i>Νέο Υλικό
+  </button>
+  {% endif %}
+</div>
+
+<!-- Stats row -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-warning"><i class="bi bi-box-seam"></i></div>
+      <div class="stat-value">{{ items|length }}</div>
+      <div class="stat-label">Σύνολο Υλικών</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-danger"><i class="bi bi-exclamation-triangle"></i></div>
+      <div class="stat-value">{{ items|selectattr('needs_reorder')|list|length }}</div>
+      <div class="stat-label">Χαμηλό Απόθεμα</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-success"><i class="bi bi-currency-euro"></i></div>
+      <div class="stat-value">{{ '{:,.0f}'.format(items|sum(attribute='stock_value')) }}</div>
+      <div class="stat-label">Αξία Αποθέματος €</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-primary"><i class="bi bi-tag"></i></div>
+      <div class="stat-value">{{ categories|length }}</div>
+      <div class="stat-label">Κατηγορίες</div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="card card-dark mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-auto">
+        <select name="cat" class="form-select form-select-sm bg-dark text-white border-secondary" onchange="this.form.submit()">
+          <option value="">Όλες οι κατηγορίες</option>
+          {% for k,v in categories %}
+          <option value="{{ k }}" {% if cat==k %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <select name="show" class="form-select form-select-sm bg-dark text-white border-secondary" onchange="this.form.submit()">
+          <option value="active" {% if show=='active' %}selected{% endif %}>Ενεργά</option>
+          <option value="all" {% if show=='all' %}selected{% endif %}>Όλα</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <input type="text" name="q" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Αναζήτηση…" value="{{ q }}">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Εμφάνιση</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="card card-dark">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-dark table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Υλικό</th>
+            <th>Κατηγορία</th>
+            <th>SKU</th>
+            <th class="text-end">Απόθεμα</th>
+            <th class="text-end">Ελάχιστο</th>
+            <th class="text-end">Τιμή/Μον.</th>
+            <th class="text-end">Αξία €</th>
+            <th>Τοποθεσία</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr class="{% if item.needs_reorder %}table-danger{% endif %}">
+            <td>
+              <strong>{{ item.name }}</strong>
+              {% if item.needs_reorder %}<span class="badge bg-danger ms-1">Χαμηλό</span>{% endif %}
+              {% if not item.is_active %}<span class="badge bg-secondary ms-1">Ανενεργό</span>{% endif %}
+            </td>
+            <td><span class="badge bg-secondary">{{ item.category or '—' }}</span></td>
+            <td class="text-muted small">{{ item.sku or '—' }}</td>
+            <td class="text-end fw-bold {% if item.needs_reorder %}text-danger{% endif %}">
+              {{ item.current_stock }} {{ item.unit }}
+            </td>
+            <td class="text-end text-muted">{{ item.min_stock }} {{ item.unit }}</td>
+            <td class="text-end">{{ '%.2f'|format(item.unit_price|float) }} €</td>
+            <td class="text-end text-warning">{{ '%.2f'|format(item.stock_value) }} €</td>
+            <td class="text-muted small">{{ item.location or '—' }}</td>
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                <a href="{{ url_for('inventory.history', id=item.id) }}" class="btn btn-outline-secondary" title="Ιστορικό">
+                  <i class="bi bi-clock-history"></i>
+                </a>
+                {% if current_user.role in ('admin','manager') %}
+                <button class="btn btn-outline-success" title="Αναπλήρωση"
+                        data-bs-toggle="modal" data-bs-target="#modalRestock{{ item.id }}">
+                  <i class="bi bi-plus-circle"></i>
+                </button>
+                {% endif %}
+                <button class="btn btn-outline-warning" title="Χρήση"
+                        data-bs-toggle="modal" data-bs-target="#modalUse{{ item.id }}">
+                  <i class="bi bi-dash-circle"></i>
+                </button>
+                {% if current_user.role in ('admin','manager') %}
+                <button class="btn btn-outline-primary" title="Επεξεργασία"
+                        data-bs-toggle="modal" data-bs-target="#modalEdit{{ item.id }}">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="9" class="text-center text-muted py-4">Δεν βρέθηκαν υλικά.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Export -->
+{% if current_user.role in ('admin','manager') %}
+<div class="mt-3 text-end">
+  <a href="{{ url_for('inventory.export_excel') }}" class="btn btn-outline-success btn-sm">
+    <i class="bi bi-file-earmark-excel me-1"></i>Εξαγωγή Excel
+  </a>
+</div>
+{% endif %}
+
+
+<!-- ── MODALS ── -->
+
+<!-- New Item -->
+<div class="modal fade" id="modalNew" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-2 text-warning"></i>Νέο Υλικό</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('inventory.new') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-8">
+              <label class="form-label">Όνομα Υλικού *</label>
+              <input type="text" name="name" class="form-control bg-dark text-white border-secondary" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Κατηγορία</label>
+              <input type="text" name="category" class="form-control bg-dark text-white border-secondary" placeholder="π.χ. Χρώματα">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">SKU / Κωδικός</label>
+              <input type="text" name="sku" class="form-control bg-dark text-white border-secondary">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Μονάδα</label>
+              <input type="text" name="unit" class="form-control bg-dark text-white border-secondary" placeholder="τεμ., kg, L" value="τεμ.">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Τιμή/Μονάδα €</label>
+              <input type="number" step="0.01" name="unit_price" class="form-control bg-dark text-white border-secondary" value="0">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Αρχικό Απόθεμα</label>
+              <input type="number" step="0.01" name="current_stock" class="form-control bg-dark text-white border-secondary" value="0">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Ελάχιστο Απόθεμα</label>
+              <input type="number" step="0.01" name="min_stock" class="form-control bg-dark text-white border-secondary" value="0">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Τοποθεσία Αποθήκης</label>
+              <input type="text" name="location" class="form-control bg-dark text-white border-secondary">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Προμηθευτής</label>
+              <input type="text" name="supplier" class="form-control bg-dark text-white border-secondary">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Σημειώσεις</label>
+              <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="2"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-gold">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% for item in items %}
+<!-- Restock Modal -->
+{% if current_user.role in ('admin','manager') %}
+<div class="modal fade" id="modalRestock{{ item.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-2 text-success"></i>Αναπλήρωση: {{ item.name }}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('inventory.restock', id=item.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <p class="text-muted">Τρέχον απόθεμα: <strong>{{ item.current_stock }} {{ item.unit }}</strong></p>
+          <div class="mb-3">
+            <label class="form-label">Ποσότητα προς προσθήκη *</label>
+            <input type="number" step="0.01" min="0.01" name="quantity" class="form-control bg-dark text-white border-secondary" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Νέα τιμή/μονάδα € (προαιρετικό)</label>
+            <input type="number" step="0.01" name="unit_price" class="form-control bg-dark text-white border-secondary" placeholder="{{ item.unit_price }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Σημειώσεις</label>
+            <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-success">Αναπλήρωση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="modalEdit{{ item.id }}" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-pencil me-2 text-primary"></i>Επεξεργασία: {{ item.name }}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('inventory.edit', id=item.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-8">
+              <label class="form-label">Όνομα *</label>
+              <input type="text" name="name" class="form-control bg-dark text-white border-secondary" value="{{ item.name }}" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Κατηγορία</label>
+              <input type="text" name="category" class="form-control bg-dark text-white border-secondary" value="{{ item.category or '' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">SKU</label>
+              <input type="text" name="sku" class="form-control bg-dark text-white border-secondary" value="{{ item.sku or '' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Μονάδα</label>
+              <input type="text" name="unit" class="form-control bg-dark text-white border-secondary" value="{{ item.unit or 'τεμ.' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Τιμή/Μονάδα €</label>
+              <input type="number" step="0.01" name="unit_price" class="form-control bg-dark text-white border-secondary" value="{{ item.unit_price }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Ελάχιστο Απόθεμα</label>
+              <input type="number" step="0.01" name="min_stock" class="form-control bg-dark text-white border-secondary" value="{{ item.min_stock }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Τοποθεσία</label>
+              <input type="text" name="location" class="form-control bg-dark text-white border-secondary" value="{{ item.location or '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Προμηθευτής</label>
+              <input type="text" name="supplier" class="form-control bg-dark text-white border-secondary" value="{{ item.supplier or '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Κατάσταση</label>
+              <select name="is_active" class="form-select bg-dark text-white border-secondary">
+                <option value="1" {% if item.is_active %}selected{% endif %}>Ενεργό</option>
+                <option value="0" {% if not item.is_active %}selected{% endif %}>Ανενεργό</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Σημειώσεις</label>
+              <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="2">{{ item.notes or '' }}</textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Use Modal -->
+<div class="modal fade" id="modalUse{{ item.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-dash-circle me-2 text-warning"></i>Χρήση: {{ item.name }}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('inventory.use', id=item.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <p class="text-muted">Διαθέσιμο: <strong>{{ item.current_stock }} {{ item.unit }}</strong></p>
+          <div class="mb-3">
+            <label class="form-label">Ποσότητα *</label>
+            <input type="number" step="0.01" min="0.01" max="{{ item.current_stock }}" name="quantity" class="form-control bg-dark text-white border-secondary" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Έργο</label>
+            <select name="project_id" class="form-select bg-dark text-white border-secondary">
+              <option value="">— Χωρίς έργο —</option>
+              {% for p in projects %}
+              <option value="{{ p.id }}">[{{ p.code }}] {{ p.title[:50] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Σημειώσεις</label>
+            <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-warning text-dark">Καταγραφή Χρήσης</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Χρονοδιάγραμμα Έργου — {{ sub.company_name }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { background:#111; color:#fff; }
+    .portal-header { background:#1a1a1a; border-bottom:1px solid #333; padding:1rem 1.5rem; }
+    .brand-gold { color:#c9a84c; }
+    .table-dark { --bs-table-bg:#1a1a1a; }
+    .phase-bar-wrap { background:#2a2a2a; border-radius:6px; height:10px; }
+    .phase-bar { height:10px; border-radius:6px; background:#c9a84c; }
+  </style>
+</head>
+<body>
+
+<div class="portal-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <span class="brand-gold fw-bold"><i class="bi bi-person-gear me-2"></i>Portal — {{ sub.company_name }}</span>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{{ url_for('subcontractors.portal_dashboard') }}" class="btn btn-sm btn-outline-secondary">← Dashboard</a>
+    <a href="{{ url_for('subcontractors.portal_reports') }}" class="btn btn-sm btn-outline-info">
+      <i class="bi bi-journal-check me-1"></i>Αναφορές
+    </a>
+    <a href="{{ url_for('subcontractors.portal_invoices') }}" class="btn btn-sm btn-outline-warning">
+      <i class="bi bi-receipt me-1"></i>Τιμολόγια
+    </a>
+    <a href="{{ url_for('subcontractors.portal_logout') }}" class="btn btn-sm btn-outline-danger"><i class="bi bi-box-arrow-right"></i></a>
+  </div>
+</div>
+
+<div class="container-fluid py-4 px-4">
+  <h5 class="brand-gold mb-4"><i class="bi bi-calendar3 me-2"></i>Χρονοδιάγραμμα Έργου</h5>
+
+  {% if not projects %}
+  <div class="text-center text-muted py-5">
+    <i class="bi bi-folder2-open fs-1 d-block mb-3 opacity-25"></i>
+    Δεν υπάρχουν ενεργές συμβάσεις με συνδεδεμένο έργο.
+  </div>
+  {% else %}
+
+  <!-- Project selector (if multiple contracts/projects) -->
+  {% if projects|length > 1 %}
+  <div class="mb-3">
+    <form method="get" class="d-flex gap-2 align-items-center">
+      <label class="text-muted small me-1">Έργο:</label>
+      <select name="project_id" class="form-select form-select-sm bg-dark text-white border-secondary" style="max-width:300px" onchange="this.form.submit()">
+        {% for p in projects %}
+        <option value="{{ p.id }}" {{ 'selected' if project and project.id == p.id }}>[{{ p.code }}] {{ p.title[:40] }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if project %}
+  <!-- Project info -->
+  <div class="card mb-4" style="background:#1a1a1a;border:1px solid #2a2a2a">
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <h6 class="brand-gold mb-2">[{{ project.code }}] {{ project.title }}</h6>
+          <dl class="row small mb-0">
+            <dt class="col-5 text-muted">Κατάσταση</dt>
+            <dd class="col-7">
+              <span class="badge bg-{{ 'success' if project.status=='active' else 'secondary' }}">{{ project.status }}</span>
+            </dd>
+            {% if project.location %}
+            <dt class="col-5 text-muted">Τοποθεσία</dt>
+            <dd class="col-7">{{ project.location }}</dd>
+            {% endif %}
+            <dt class="col-5 text-muted">Έναρξη</dt>
+            <dd class="col-7">{{ project.start_date.strftime('%d/%m/%Y') if project.start_date else '—' }}</dd>
+            <dt class="col-5 text-muted">Λήξη</dt>
+            <dd class="col-7">{{ project.end_date.strftime('%d/%m/%Y') if project.end_date else '—' }}</dd>
+          </dl>
+        </div>
+        <div class="col-md-6">
+          {% if project.completion_pct is defined and project.completion_pct %}
+          <div class="text-muted small mb-1">Συνολική Πρόοδος</div>
+          <div class="phase-bar-wrap mb-1">
+            <div class="phase-bar" style="width:{{ project.completion_pct }}%"></div>
+          </div>
+          <div class="text-end text-muted small">{{ project.completion_pct }}%</div>
+          {% endif %}
+          <!-- My contract info -->
+          {% for c in contracts if c.project_id == project.id %}
+          <div class="mt-2 p-2 rounded" style="background:#222">
+            <div class="small text-muted mb-1">Η Σύμβασή μου</div>
+            <div class="fw-bold small">{{ c.title[:50] }}</div>
+            <div class="d-flex justify-content-between mt-1 small">
+              <span class="badge bg-{{ c.status_color }}">{{ c.status_label }}</span>
+              <span class="text-success">{{ '{:,.0f}'.format(c.contract_value|float) }} €</span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phases / Timeline -->
+  <div class="card mb-4" style="background:#1a1a1a;border:1px solid #2a2a2a">
+    <div class="card-header border-secondary">
+      <h6 class="mb-0"><i class="bi bi-list-task me-1 text-warning"></i>Φάσεις Έργου</h6>
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-dark table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Φάση</th>
+            <th>Έναρξη</th>
+            <th>Λήξη</th>
+            <th class="text-end">Πρόοδος</th>
+            <th>Κατάσταση</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ph in phases %}
+          <tr>
+            <td>
+              <strong class="small">{{ ph.name }}</strong>
+              {% if ph.description %}
+              <div class="text-muted" style="font-size:11px">{{ ph.description[:60] }}</div>
+              {% endif %}
+            </td>
+            <td class="small text-muted">{{ ph.start_date.strftime('%d/%m/%Y') if ph.start_date else '—' }}</td>
+            <td class="small text-muted">
+              {% if ph.end_date %}
+              <span class="{{ 'text-danger' if ph.end_date < today and ph.status != 'completed' else '' }}">
+                {{ ph.end_date.strftime('%d/%m/%Y') }}
+              </span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="text-end">
+              {% if ph.completion_pct is defined %}
+              <div class="phase-bar-wrap" style="width:80px;display:inline-block;vertical-align:middle">
+                <div class="phase-bar" style="width:{{ ph.completion_pct or 0 }}%"></div>
+              </div>
+              <span class="ms-1 small">{{ ph.completion_pct or 0 }}%</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% set sc = ph.status if ph.status else 'pending' %}
+              <span class="badge bg-{{ 'success' if sc=='completed' else 'warning text-dark' if sc=='active' else 'secondary' }}">
+                {{ {'pending':'Εκκρεμεί','active':'Σε Εξέλιξη','completed':'Ολοκληρώθηκε','paused':'Σε Παύση'}.get(sc, sc) }}
+              </span>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="text-center text-muted py-4 small">
+              Δεν υπάρχουν καταχωρημένες φάσεις για αυτό το έργο.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Recent approved daily reports -->
+  {% if reports %}
+  <div class="card" style="background:#1a1a1a;border:1px solid #2a2a2a">
+    <div class="card-header border-secondary">
+      <h6 class="mb-0"><i class="bi bi-journal-text me-1 text-info"></i>Πρόσφατες Αναφορές Εργασίας</h6>
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-dark table-hover mb-0">
+        <thead>
+          <tr><th>Ημ/νία</th><th>Εργαζόμενος</th><th>Εργασίες</th><th class="text-end">Ώρες</th><th class="text-end">Πρόοδος</th></tr>
+        </thead>
+        <tbody>
+          {% for r in reports %}
+          <tr>
+            <td class="small">{{ r.report_date.strftime('%d/%m/%Y') }}</td>
+            <td class="small">{{ r.employee.full_name if r.employee else '—' }}</td>
+            <td class="small text-muted">{{ r.work_done[:80] if r.work_done else '—' }}</td>
+            <td class="text-end small">{{ r.hours_worked }}h</td>
+            <td class="text-end small">{{ r.progress_pct }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% endif %}{# project #}
+  {% endif %}{# projects #}
+
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

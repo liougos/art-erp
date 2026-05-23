@@ -1,0 +1,319 @@
+{% extends 'base.html' %}
+{% block title %}Επαναλαμβανόμενα Έξοδα — ART ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Επαναλαμβανόμενα Έξοδα</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h1 class="page-title"><i class="bi bi-arrow-repeat me-2 text-gold"></i>Επαναλαμβανόμενα Έξοδα</h1>
+    <p class="page-subtitle text-muted">Συνδρομές, ενοίκια, δόσεις δανείων και άλλα σταθερά έξοδα</p>
+  </div>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newModal">
+    <i class="bi bi-plus-lg me-1"></i>Νέο Έξοδο
+  </button>
+</div>
+
+<!-- Σύνοψη -->
+{% set active_expenses = expenses | selectattr('is_active') | list %}
+{% set monthly_total = namespace(v=0) %}
+{% for e in active_expenses %}
+  {% if e.frequency == 'monthly' %}{% set monthly_total.v = monthly_total.v + e.amount %}
+  {% elif e.frequency == 'weekly' %}{% set monthly_total.v = monthly_total.v + e.amount * 4.33 %}
+  {% elif e.frequency == 'quarterly' %}{% set monthly_total.v = monthly_total.v + e.amount / 3 %}
+  {% elif e.frequency == 'yearly' %}{% set monthly_total.v = monthly_total.v + e.amount / 12 %}
+  {% endif %}
+{% endfor %}
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-value">{{ active_expenses | length }}</div>
+      <div class="kpi-label">Ενεργά Έξοδα</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-value">{{ '%.0f' | format(monthly_total.v) }}€</div>
+      <div class="kpi-label">Εκτιμώμενο/μήνα</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-value text-warning">{{ overdue_count }}</div>
+      <div class="kpi-label">Ληξιπρόθεσμα</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-value">{{ '%.0f' | format(monthly_total.v * 12) }}€</div>
+      <div class="kpi-label">Εκτιμώμενο/έτος</div>
+    </div>
+  </div>
+</div>
+
+<!-- Filter tabs -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <ul class="nav nav-tabs card-header-tabs border-0">
+      <li class="nav-item">
+        <a class="nav-link {% if show=='all' %}active{% endif %}" href="?show=all">Όλα</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if show=='active' %}active{% endif %}" href="?show=active">Ενεργά</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if show=='inactive' %}active{% endif %}" href="?show=inactive">Ανενεργά</a>
+      </li>
+    </ul>
+  </div>
+
+  <div class="card-body p-0">
+    {% if expenses %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th>Περιγραφή</th>
+            <th>Κατηγορία</th>
+            <th>Ποσό</th>
+            <th>Συχνότητα</th>
+            <th>Επόμενη Πληρωμή</th>
+            <th>Έργο</th>
+            <th>Κατάσταση</th>
+            <th class="text-end">Ενέργειες</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in expenses %}
+          {% set overdue = e.next_due and e.next_due <= today and e.is_active %}
+          {% set soon = e.next_due and (e.next_due - today).days <= 7 and e.next_due > today and e.is_active %}
+          <tr class="{% if overdue %}table-danger{% elif soon %}table-warning{% endif %}">
+            <td>
+              <div class="fw-semibold">{{ e.name }}</div>
+              {% if e.notes %}<div class="text-muted small">{{ e.notes | truncate(50) }}</div>{% endif %}
+            </td>
+            <td>
+              <span class="badge bg-secondary">{{ e.category or '—' }}</span>
+            </td>
+            <td>
+              <div class="fw-semibold">{{ e.amount | int }}€</div>
+              <div class="text-muted small">+ΦΠΑ {{ e.vat_rate | int }}%</div>
+            </td>
+            <td>{{ e.frequency_label }}</td>
+            <td>
+              {% if e.next_due %}
+                <div class="{% if overdue %}text-danger fw-bold{% elif soon %}text-warning fw-semibold{% endif %}">
+                  {{ e.next_due.strftime('%d/%m/%Y') }}
+                </div>
+                {% if overdue %}<div class="text-danger small"><i class="bi bi-exclamation-triangle-fill"></i> Ληξιπρόθεσμο</div>{% endif %}
+                {% if soon %}<div class="text-warning small"><i class="bi bi-clock"></i> Σύντομα</div>{% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td>{{ e.project.title if e.project else '—' }}</td>
+            <td>
+              <span class="badge {% if e.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                {{ 'Ενεργό' if e.is_active else 'Ανενεργό' }}
+              </span>
+            </td>
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" title="Επεξεργασία"
+                        data-bs-toggle="modal" data-bs-target="#editModal{{ e.id }}">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <form method="post" action="{{ url_for('recurring.toggle', id=e.id) }}" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-outline-{% if e.is_active %}warning{% else %}success{% endif %}"
+                          title="{{ 'Απενεργοποίηση' if e.is_active else 'Ενεργοποίηση' }}">
+                    <i class="bi bi-{% if e.is_active %}pause-fill{% else %}play-fill{% endif %}"></i>
+                  </button>
+                </form>
+                {% if current_user.role in ('admin','manager') %}
+                <form method="post" action="{{ url_for('recurring.delete', id=e.id) }}" class="d-inline"
+                      onsubmit="return confirm('Διαγραφή του \"{{ e.name }}\" οριστικά;')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-outline-danger" title="Διαγραφή">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+
+          <!-- Edit Modal -->
+          <div class="modal fade" id="editModal{{ e.id }}" tabindex="-1">
+            <div class="modal-dialog">
+              <div class="modal-content">
+                <form method="post" action="{{ url_for('recurring.edit', id=e.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <div class="modal-header">
+                    <h5 class="modal-title">Επεξεργασία: {{ e.name }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="mb-3">
+                      <label class="form-label">Περιγραφή *</label>
+                      <input type="text" name="name" class="form-control" value="{{ e.name }}" required>
+                    </div>
+                    <div class="row g-2 mb-3">
+                      <div class="col">
+                        <label class="form-label">Ποσό (€) *</label>
+                        <input type="number" name="amount" class="form-control" step="0.01" value="{{ e.amount }}" required>
+                      </div>
+                      <div class="col">
+                        <label class="form-label">ΦΠΑ %</label>
+                        <select name="vat_rate" class="form-select">
+                          <option value="0" {% if e.vat_rate == 0 %}selected{% endif %}>0%</option>
+                          <option value="6" {% if e.vat_rate == 6 %}selected{% endif %}>6%</option>
+                          <option value="13" {% if e.vat_rate == 13 %}selected{% endif %}>13%</option>
+                          <option value="24" {% if e.vat_rate == 24 %}selected{% endif %}>24%</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                      <div class="col">
+                        <label class="form-label">Κατηγορία</label>
+                        <select name="category" class="form-select">
+                          <option value="">— Επιλογή —</option>
+                          {% for c in categories %}
+                          <option value="{{ c }}" {% if e.category == c %}selected{% endif %}>{{ c }}</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                      <div class="col">
+                        <label class="form-label">Συχνότητα</label>
+                        <select name="frequency" class="form-select">
+                          <option value="weekly" {% if e.frequency=='weekly' %}selected{% endif %}>Εβδομαδιαία</option>
+                          <option value="monthly" {% if e.frequency=='monthly' %}selected{% endif %}>Μηνιαία</option>
+                          <option value="quarterly" {% if e.frequency=='quarterly' %}selected{% endif %}>Τριμηνιαία</option>
+                          <option value="yearly" {% if e.frequency=='yearly' %}selected{% endif %}>Ετήσια</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label">Επόμενη Πληρωμή</label>
+                      <input type="date" name="next_due" class="form-control"
+                             value="{{ e.next_due.strftime('%Y-%m-%d') if e.next_due else '' }}">
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label">Σχετικό Έργο</label>
+                      <select name="project_id" class="form-select">
+                        <option value="">— Χωρίς έργο —</option>
+                        {% for p in projects %}
+                        <option value="{{ p.id }}" {% if e.project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label">Σημειώσεις</label>
+                      <textarea name="notes" class="form-control" rows="2">{{ e.notes or '' }}</textarea>
+                    </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+                    <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-arrow-repeat fs-1 d-block mb-3 opacity-25"></i>
+      <p>Δεν υπάρχουν επαναλαμβανόμενα έξοδα.</p>
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newModal">
+        <i class="bi bi-plus-lg me-1"></i>Προσθήκη πρώτου
+      </button>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- New Modal -->
+<div class="modal fade" id="newModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('recurring.new') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Νέο Επαναλαμβανόμενο Έξοδο</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Περιγραφή *</label>
+            <input type="text" name="name" class="form-control" placeholder="π.χ. Ενοίκιο γραφείου" required>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col">
+              <label class="form-label">Ποσό (€) *</label>
+              <input type="number" name="amount" class="form-control" step="0.01" min="0" required>
+            </div>
+            <div class="col">
+              <label class="form-label">ΦΠΑ %</label>
+              <select name="vat_rate" class="form-select">
+                <option value="0">0%</option>
+                <option value="6">6%</option>
+                <option value="13">13%</option>
+                <option value="24" selected>24%</option>
+              </select>
+            </div>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col">
+              <label class="form-label">Κατηγορία</label>
+              <select name="category" class="form-select">
+                <option value="">— Επιλογή —</option>
+                {% for c in categories %}
+                <option value="{{ c }}">{{ c }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col">
+              <label class="form-label">Συχνότητα</label>
+              <select name="frequency" class="form-select">
+                <option value="weekly">Εβδομαδιαία</option>
+                <option value="monthly" selected>Μηνιαία</option>
+                <option value="quarterly">Τριμηνιαία</option>
+                <option value="yearly">Ετήσια</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Ημερομηνία Έναρξης *</label>
+            <input type="date" name="start_date" class="form-control"
+                   value="{{ today.strftime('%Y-%m-%d') }}" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Σχετικό Έργο (προαιρετικό)</label>
+            <select name="project_id" class="form-select">
+              <option value="">— Χωρίς έργο —</option>
+              {% for p in projects %}
+              <option value="{{ p.id }}">{{ p.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Σημειώσεις</label>
+            <textarea name="notes" class="form-control" rows="2"
+                      placeholder="π.χ. Τράπεζα Πειραιώς, δόση δανείου αρ. 12345"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Προσθήκη
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

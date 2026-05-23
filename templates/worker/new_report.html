@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Νέα Αναφορά — ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('worker.dashboard') }}">Πύλη Εργαζομένου</a></li>
+<li class="breadcrumb-item active">Νέα Αναφορά</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><i class="bi bi-journal-plus me-2 text-warning"></i>Ημερήσια Αναφορά Προόδου</h1>
+</div>
+
+{% if is_manager %}
+<div class="alert alert-info mb-3">
+  <i class="bi bi-shield-check me-1"></i>
+  Αναφορά Διαχειριστή — υποβάλλεται αυτόματα ως <strong>εγκεκριμένη</strong>.
+</div>
+{% endif %}
+
+<form method="POST" action="{{ url_for('worker.new_report') }}" class="row g-3">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="col-lg-8">
+
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-folder2"></i> Έργο & Ημερομηνία</div>
+      <div class="card-body row g-3">
+        {% if is_manager %}
+        <!-- Manager: pick any employee -->
+        <div class="col-md-6">
+          <label class="form-label">Εργαζόμενος *</label>
+          <select name="employee_id" class="form-select" required>
+            <option value="">— Επιλέξτε —</option>
+            {% for e in employees_all %}
+            <option value="{{ e.id }}">{{ e.last_name }} {{ e.first_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Έργο *</label>
+          <select name="project_id" class="form-select" required>
+            <option value="">— Επιλέξτε Έργο —</option>
+            {% for p in projects_all %}
+            <option value="{{ p.id }}">[{{ p.code }}] {{ p.title[:40] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% else %}
+        <!-- Worker: only their assignments -->
+        <div class="col-md-8">
+          <label class="form-label">Έργο *</label>
+          <select name="project_id" class="form-select" required id="projectSelect">
+            <option value="">— Επιλέξτε Έργο —</option>
+            {% for a in assignments %}
+            <option value="{{ a.project_id }}"
+              {% if request.args.get('project_id')|string == a.project_id|string %}selected{% endif %}>
+              {{ a.project.code }} — {{ a.project.title[:50] }}
+              {% if a.project.location %}({{ a.project.location }}){% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        <div class="col-md-{% if is_manager %}12{% else %}4{% endif %}">
+          <label class="form-label">Ημερομηνία *</label>
+          <input type="date" name="report_date" class="form-control" value="{{ today }}" required>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-tools"></i> Εργασίες Ημέρας</div>
+      <div class="card-body row g-3">
+        <div class="col-12">
+          <label class="form-label">Εργασίες που εκτελέστηκαν *</label>
+          <textarea name="work_done" class="form-control" rows="5" required
+            placeholder="Περιγράψτε αναλυτικά τι έγινε σήμερα στο έργο…"></textarea>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Ώρες Εργασίας</label>
+          <input type="number" name="hours_worked" class="form-control" value="8" min="0.5" max="24" step="0.5">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Εργαζόμενοι Παρόντες</label>
+          <input type="number" name="workers_present" class="form-control" value="1" min="1">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Καιρός</label>
+          <select name="weather" class="form-select">
+            <option value="">— —</option>
+            <option>Ηλιόλουστο</option>
+            <option>Συννεφιά</option>
+            <option>Βροχερό</option>
+            <option>Ανεμώδες</option>
+            <option>Εσωτερικός χώρος</option>
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Υλικά που χρησιμοποιήθηκαν</label>
+          <textarea name="materials_used" class="form-control" rows="2"
+            placeholder="π.χ. Αρίδα 2kg, Πρόλεπτο 500ml, Consolid 35 (1lt)…"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-exclamation-circle"></i> Προβλήματα & Επόμενα Βήματα</div>
+      <div class="card-body row g-3">
+        <div class="col-12">
+          <label class="form-label">Προβλήματα / Παρατηρήσεις</label>
+          <textarea name="problems" class="form-control" rows="3"
+            placeholder="Τυχόν αναπάντεχα προβλήματα, ελλείψεις υλικών, κακοκαιρία κ.λπ."></textarea>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Επόμενα Βήματα</label>
+          <textarea name="next_steps" class="form-control" rows="2"
+            placeholder="Τι προγραμματίζεται για αύριο/επόμενη μέρα…"></textarea>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Sidebar -->
+  <div class="col-lg-4">
+    <div class="card position-sticky" style="top:80px">
+      <div class="card-header"><i class="bi bi-graph-up"></i> Πρόοδος Έργου</div>
+      <div class="card-body">
+        <label class="form-label">Εκτιμώμενη Πρόοδος (%)</label>
+        <input type="range" name="progress_pct" id="progressRange" class="form-range" min="0" max="100" step="5" value="0" oninput="document.getElementById('progressVal').textContent=this.value+'%'">
+        <div class="text-center fw-bold fs-4 text-primary" id="progressVal">0%</div>
+        <small class="text-muted">Αφήστε κενό αν δεν γνωρίζετε</small>
+      </div>
+      <div class="card-body border-top pt-3">
+        <button type="submit" class="btn btn-primary w-100 mb-2">
+          <i class="bi bi-send me-1"></i>Υποβολή Αναφοράς
+        </button>
+        <a href="{{ url_for('worker.dashboard') }}" class="btn btn-outline-secondary w-100">Ακύρωση</a>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}

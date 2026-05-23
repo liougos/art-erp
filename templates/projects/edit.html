@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Επεξεργασία — {{ project.code }}{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('projects.index') }}">Έργα</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('projects.detail', id=project.id) }}">{{ project.code }}</a></li>
+<li class="breadcrumb-item active">Επεξεργασία</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><i class="bi bi-pencil me-2 text-primary"></i>Επεξεργασία: {{ project.code }}</h1>
+</div>
+
+<form method="POST" class="row g-3">
+  <div class="col-lg-8">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-info-circle"></i> Βασικά Στοιχεία</div>
+      <div class="card-body row g-3">
+        <div class="col-12"><label class="form-label">Τίτλος *</label><input type="text" name="title" class="form-control" required value="{{ project.title }}"></div>
+        <div class="col-md-4">
+          <label class="form-label">Κατάσταση</label>
+          <select name="status" class="form-select">
+            {% for s, l in [('planning','Σχεδιασμός'),('active','Ενεργό'),('paused','Παύση'),('completed','Ολοκληρώθηκε'),('cancelled','Ακυρώθηκε')] %}
+            <option value="{{ s }}" {% if project.status==s %}selected{% endif %}>{{ l }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Πρόοδος (%)</label>
+          <input type="number" name="progress_pct" class="form-control" min="0" max="100" value="{{ project.progress_pct }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Υπεύθυνος</label>
+          <select name="manager_id" class="form-select">
+            <option value="">— Κανείς —</option>
+            {% for u in users %}
+            <option value="{{ u.id }}" {% if project.manager_id==u.id %}selected{% endif %}>{{ u.full_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6"><label class="form-label">Τοποθεσία</label><input type="text" name="location" class="form-control" value="{{ project.location or '' }}"></div>
+        <div class="col-md-6"><label class="form-label">Είδος Συντήρησης</label><input type="text" name="conservation_type" class="form-control" value="{{ project.conservation_type or '' }}"></div>
+        <div class="col-md-6"><label class="form-label">Εποπτεύουσα Αρχή</label><input type="text" name="supervising_authority" class="form-control" value="{{ project.supervising_authority or '' }}"></div>
+        <div class="col-md-6"><label class="form-label">Πελάτης</label><input type="text" name="client_name" class="form-control" value="{{ project.client_name or '' }}"></div>
+        <div class="col-md-6"><label class="form-label">Επικοινωνία</label><input type="text" name="client_contact" class="form-control" value="{{ project.client_contact or '' }}"></div>
+        <div class="col-md-6"><label class="form-label">Email</label><input type="email" name="client_email" class="form-control" value="{{ project.client_email or '' }}"></div>
+        <div class="col-md-3"><label class="form-label">Έναρξη</label><input type="date" name="start_date" class="form-control" value="{{ project.start_date.strftime('%Y-%m-%d') if project.start_date else '' }}"></div>
+        <div class="col-md-3"><label class="form-label">Λήξη</label><input type="date" name="end_date" class="form-control" value="{{ project.end_date.strftime('%Y-%m-%d') if project.end_date else '' }}"></div>
+        <div class="col-md-3"><label class="form-label">Αξία Σύμβασης (€)</label><input type="number" name="contract_value" class="form-control" step="0.01" value="{{ project.contract_value or '' }}"></div>
+        <div class="col-md-3"><label class="form-label">Budget (€)</label><input type="number" name="total_budget" class="form-control" step="0.01" value="{{ project.total_budget or '' }}"></div>
+        <div class="col-12"><label class="form-label">Σημειώσεις</label><textarea name="notes" class="form-control" rows="3">{{ project.notes or '' }}</textarea></div>
+      </div>
+      <div class="card-footer d-flex gap-2 justify-content-end">
+        <a href="{{ url_for('projects.detail', id=project.id) }}" class="btn btn-outline-secondary">Ακύρωση</a>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check2 me-1"></i>Αποθήκευση</button>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}

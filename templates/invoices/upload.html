@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% block title %}Νέο Τιμολόγιο — ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('invoices.index') }}">Τιμολόγια</a></li>
+<li class="breadcrumb-item active">Νέο</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><i class="bi bi-receipt-cutoff me-2 text-primary"></i>Καταχώρηση Τιμολογίου</h1>
+  <p class="page-subtitle">Από φωτογραφία, email ή χειροκίνητα</p>
+</div>
+
+<form method="POST" enctype="multipart/form-data" class="row g-3">
+  <!-- Image upload -->
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-camera"></i> Φωτογραφία Τιμολογίου</div>
+      <div class="card-body">
+        <div class="upload-zone" id="uploadZone">
+          <i class="bi bi-cloud-upload d-block mb-2"></i>
+          <div class="fw-semibold mb-1">Σύρετε φωτογραφία ή PDF εδώ</div>
+          <div class="text-muted small mb-3">ή κάντε κλικ για επιλογή</div>
+          <div class="text-muted" style="font-size:11px">PNG, JPG, PDF — έως 50MB</div>
+          <input type="file" id="invoice_image" name="invoice_image" accept="image/*,.pdf" class="d-none">
+        </div>
+        <div id="aiStatus" class="d-none mt-3 p-2 rounded bg-light text-center small"></div>
+        <div class="preview-wrap d-none mt-3 text-center">
+          <img id="image_preview" src="" alt="Preview" class="img-fluid rounded" style="max-height:250px">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Form fields -->
+  <div class="col-lg-8">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-info-circle"></i> Στοιχεία Τιμολογίου</div>
+      <div class="card-body row g-3">
+        <div class="col-md-4">
+          <label class="form-label">Τύπος *</label>
+          <div class="d-flex gap-2">
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="invoice_type" id="typeExpense" value="expense" checked>
+              <label class="form-check-label text-danger fw-semibold" for="typeExpense"><i class="bi bi-arrow-up"></i> Έξοδο</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="invoice_type" id="typeIncome" value="income">
+              <label class="form-check-label text-success fw-semibold" for="typeIncome"><i class="bi bi-arrow-down"></i> Έσοδο</label>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Αρ. Τιμολογίου</label>
+          <input type="text" name="invoice_number" class="form-control" placeholder="π.χ. ΤΠΥ 1234">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Ημ. Τιμολογίου</label>
+          <input type="date" name="invoice_date" class="form-control" value="{{ today.strftime('%Y-%m-%d') if today is defined else '' }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Εκδότης</label>
+          <input type="text" name="issuer" class="form-control" placeholder="Επωνυμία εκδότη">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">ΑΦΜ Εκδότη</label>
+          <input type="text" name="issuer_afm" class="form-control" placeholder="999999999">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Λήπτης</label>
+          <input type="text" name="recipient" class="form-control" value="ART RESTORATION AE">
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-currency-euro"></i> Ποσά</div>
+      <div class="card-body row g-3">
+        <div class="col-md-4">
+          <label class="form-label">Καθαρό Ποσό (€) *</label>
+          <input type="number" id="amount_net" name="amount_net" class="form-control" step="0.01" required placeholder="0.00">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Συντελεστής ΦΠΑ (%)</label>
+          <select id="vat_rate" name="vat_rate" class="form-select">
+            <option value="24" selected>24%</option>
+            <option value="13">13%</option>
+            <option value="6">6%</option>
+            <option value="0">0%</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">ΦΠΑ</label>
+          <div class="form-control bg-light fw-semibold" id="vat_display">0,00 €</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Σύνολο</label>
+          <div class="form-control bg-light fw-bold text-primary fs-5" id="total_display">0,00 €</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-tag"></i> Κατηγορία & Συσχέτιση</div>
+      <div class="card-body row g-3">
+        <div class="col-md-4">
+          <label class="form-label">Κατηγορία</label>
+          <select name="category" class="form-select">
+            <option value="">— Επιλέξτε —</option>
+            {% for c in categories %}
+            <option value="{{ c }}">{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Συνδεδεμένο Έργο</label>
+          <select name="project_id" class="form-select">
+            <option value="">— Κανένα —</option>
+            {% for p in projects %}
+            <option value="{{ p.id }}">{{ p.code }} — {{ p.title[:30] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Κατάσταση Πληρωμής</label>
+          <select name="payment_status" class="form-select">
+            <option value="pending">Εκκρεμεί</option>
+            <option value="paid">Πληρωμένο</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Ημ. Λήξης Πληρωμής</label>
+          <input type="date" name="due_date" class="form-control">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Ημ. Πληρωμής</label>
+          <input type="date" name="payment_date" class="form-control">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Τρόπος Πληρωμής</label>
+          <select name="payment_method" class="form-select">
+            <option value="">—</option>
+            <option>Τραπεζική Μεταφορά</option>
+            <option>Μετρητά</option>
+            <option>Επιταγή</option>
+            <option>Κάρτα</option>
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Σημειώσεις</label>
+          <textarea name="notes" class="form-control" rows="2"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2 justify-content-end">
+      <a href="{{ url_for('invoices.index') }}" class="btn btn-outline-secondary">Ακύρωση</a>
+      <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check2 me-1"></i>Αποθήκευση Τιμολογίου</button>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  const fileInput   = document.getElementById('invoice_image');
+  const uploadZone  = document.getElementById('uploadZone');
+  const aiStatus    = document.getElementById('aiStatus');
+  const preview     = document.getElementById('image_preview');
+  const previewWrap = document.querySelector('.preview-wrap');
+
+  function handleFile(file) {
+    if (!file) return;
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = e => { preview.src = e.target.result; previewWrap.classList.remove('d-none'); };
+      reader.readAsDataURL(file);
+    }
+    aiStatus.className = 'mt-3 p-2 rounded bg-light text-center small';
+    aiStatus.innerHTML = '<span class="spinner-border spinner-border-sm me-2 text-gold"></span>AI ανάλυση τιμολογίου…';
+    const fd = new FormData();
+    fd.append('file', file);
+    fetch('/invoices/extract', { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          aiStatus.innerHTML = '<i class="bi bi-exclamation-triangle text-warning me-1"></i>Δεν εντοπίστηκαν στοιχεία — συμπληρώστε χειροκίνητα.';
+          return;
+        }
+        const fill = (sel, val) => { const el = document.querySelector(sel); if (el && val !== undefined && val !== null && val !== '') el.value = val; };
+        fill('[name=invoice_number]', data.invoice_number);
+        fill('[name=invoice_date]',   data.invoice_date);
+        fill('[name=issuer]',         data.issuer);
+        fill('[name=issuer_afm]',     data.issuer_afm);
+        if (data.amount_net) {
+          document.getElementById('amount_net').value = data.amount_net;
+          document.getElementById('amount_net').dispatchEvent(new Event('input'));
+        }
+        if (data.vat_rate != null) {
+          const sel = document.getElementById('vat_rate');
+          for (const o of sel.options) {
+            if (parseFloat(o.value) === parseFloat(data.vat_rate)) { o.selected = true; break; }
+          }
+          sel.dispatchEvent(new Event('change'));
+        }
+        if (data.invoice_type === 'income') document.getElementById('typeIncome').checked = true;
+        aiStatus.innerHTML = '<i class="bi bi-check-circle text-success me-1"></i><strong>Στοιχεία εξήχθηκαν επιτυχώς</strong> — ελέγξτε πριν αποθηκεύσετε.';
+      })
+      .catch(() => {
+        aiStatus.innerHTML = '<i class="bi bi-wifi-off text-muted me-1"></i>AI extraction απέτυχε — συμπληρώστε χειροκίνητα.';
+      });
+  }
+
+  uploadZone.addEventListener('click', () => fileInput.click());
+  uploadZone.addEventListener('dragover',  e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault(); uploadZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) { const dt = new DataTransfer(); dt.items.add(file); fileInput.files = dt.files; handleFile(file); }
+  });
+  fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+  // VAT live calc
+  const netEl     = document.getElementById('amount_net');
+  const vatSel    = document.getElementById('vat_rate');
+  const vatDisp   = document.getElementById('vat_display');
+  const totalDisp = document.getElementById('total_display');
+  function recalc() {
+    const net   = parseFloat(netEl.value) || 0;
+    const rate  = parseFloat(vatSel.value) || 0;
+    const vat   = Math.round(net * rate) / 100;
+    const total = net + vat;
+    const fmt = n => n.toLocaleString('el-GR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €';
+    vatDisp.textContent   = fmt(vat);
+    totalDisp.textContent = fmt(total);
+  }
+  netEl.addEventListener('input',  recalc);
+  vatSel.addEventListener('change', recalc);
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Αιτήματα Άδειας — HR{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('hr.index') }}">HR</a></li>
+<li class="breadcrumb-item active">Αιτήματα Άδειας</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-calendar-check me-2 text-primary"></i>Αιτήματα Άδειας</h1>
+    <p class="page-subtitle">Έγκριση / απόρριψη αιτημάτων εργαζομένων</p>
+  </div>
+</div>
+
+<!-- Status filter -->
+<div class="d-flex gap-2 mb-4">
+  {% for s, lbl in [('pending','Εκκρεμή'),('approved','Εγκεκριμένα'),('rejected','Απορριφθέντα'),('all','Όλα')] %}
+  <a href="{{ url_for('hr.leave_index', status=s) }}"
+     class="btn btn-sm {% if status == s %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ lbl }}</a>
+  {% endfor %}
+</div>
+
+{% if leaves %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Εργαζόμενος</th>
+          <th>Είδος Άδειας</th>
+          <th>Από</th>
+          <th>Έως</th>
+          <th>Εργάσιμες</th>
+          <th>Αιτιολογία</th>
+          <th>Κατάσταση</th>
+          <th>Υποβλήθηκε</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for leave in leaves %}
+        <tr>
+          <td class="fw-semibold">{{ leave.employee.full_name }}</td>
+          <td>
+            <span class="badge bg-secondary" style="font-size:11px">
+              {{ {'annual':'Κανονική','sick':'Ασθένεια','unpaid':'Άνευ αποδοχών','other':'Άλλη'}.get(leave.leave_type, leave.leave_type) }}
+            </span>
+          </td>
+          <td>{{ leave.start_date.strftime('%d/%m/%Y') }}</td>
+          <td>{{ leave.end_date.strftime('%d/%m/%Y') }}</td>
+          <td class="text-center fw-semibold">{{ leave.working_days }}</td>
+          <td class="text-truncate" style="max-width:150px">
+            <small>{{ leave.reason or '—' }}</small>
+          </td>
+          <td>
+            <span class="badge {{ leave.status_color }}">
+              {{ {'pending':'Εκκρεμεί','approved':'Εγκρίθηκε','rejected':'Απορρίφθηκε'}.get(leave.status, leave.status) }}
+            </span>
+          </td>
+          <td><small class="text-muted">{{ leave.created_at.strftime('%d/%m/%Y') }}</small></td>
+          <td>
+            {% if leave.status == 'pending' %}
+            <div class="d-flex gap-1">
+              <form method="POST" action="{{ url_for('hr.review_leave', lid=leave.id) }}">
+                <input type="hidden" name="action" value="approved">
+                <button type="submit" class="btn btn-sm btn-success" title="Έγκριση">
+                  <i class="bi bi-check-lg"></i>
+                </button>
+              </form>
+              <button class="btn btn-sm btn-danger" data-bs-toggle="modal"
+                      data-bs-target="#rejectModal{{ leave.id }}" title="Απόρριψη">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
+            {% elif leave.review_notes %}
+            <small class="text-muted" title="{{ leave.review_notes }}">
+              <i class="bi bi-chat-left-text"></i>
+            </small>
+            {% endif %}
+          </td>
+        </tr>
+
+        <!-- Reject Modal -->
+        <div class="modal fade" id="rejectModal{{ leave.id }}" tabindex="-1">
+          <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h6 class="modal-title">Απόρριψη Αιτήματος</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+              </div>
+              <form method="POST" action="{{ url_for('hr.review_leave', lid=leave.id) }}">
+                <div class="modal-body">
+                  <input type="hidden" name="action" value="rejected">
+                  <label class="form-label">Αιτιολογία Απόρριψης</label>
+                  <textarea name="review_notes" class="form-control" rows="3" placeholder="Προαιρετικά..."></textarea>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Ακύρωση</button>
+                  <button type="submit" class="btn btn-danger btn-sm">Απόρριψη</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Leave Balance Summary -->
+<div class="card mt-4">
+  <div class="card-header"><i class="bi bi-bar-chart text-primary"></i> Υπόλοιπα Αδειών {{ today.year }}</div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead><tr><th>Εργαζόμενος</th><th>Δικαιούται</th><th>Χρησιμοποίησε</th><th>Υπόλοιπο</th></tr></thead>
+      <tbody>
+        {% for emp in employees %}
+        {% set year = today.year %}
+        {% set bal = emp.leave_balances.filter_by(year=year).first() %}
+        {% set total = (bal.total_days if bal else emp.annual_leave_days) or 20 %}
+        {% set used = bal.used_days if bal else 0 %}
+        {% set remaining = total - used %}
+        <tr>
+          <td class="fw-semibold">{{ emp.full_name }}</td>
+          <td>{{ total }} ημ.</td>
+          <td>{{ used }} ημ.</td>
+          <td>
+            <span class="badge {% if remaining <= 3 %}bg-danger{% elif remaining <= 7 %}bg-warning text-dark{% else %}bg-success{% endif %}">
+              {{ remaining }} ημ.
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% else %}
+<div class="card">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-calendar-check d-block fs-1 opacity-25 mb-3"></i>
+    <p>Δεν υπάρχουν αιτήματα για την επιλεγμένη κατάσταση.</p>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

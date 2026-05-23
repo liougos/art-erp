@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}Ιστορικό Σκαλωσιών{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('scaffolding.index') }}">Σκαλωσιές</a></li>
+<li class="breadcrumb-item active">Ιστορικό Αναθέσεων</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h2 class="page-title mb-0"><i class="bi bi-clock-history me-2 text-warning"></i>Ιστορικό Αναθέσεων Σκαλωσιών</h2>
+  <a href="{{ url_for('scaffolding.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Πίσω στη Διαχείριση
+  </a>
+</div>
+
+<!-- Filter -->
+<div class="card card-dark mb-4">
+  <div class="card-body py-3">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small text-muted mb-1">Φίλτρο Έργου</label>
+        <select name="project_id" class="form-select form-select-sm bg-dark text-white border-secondary">
+          <option value="">— Όλα τα Έργα —</option>
+          {% for p in projects %}
+          <option value="{{ p.id }}" {{ 'selected' if project_id|string == p.id|string }}>
+            [{{ p.code }}] {{ p.title[:40] }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-warning">
+          <i class="bi bi-funnel me-1"></i>Φίλτρο
+        </button>
+        {% if project_id %}
+        <a href="{{ url_for('scaffolding.history') }}" class="btn btn-sm btn-outline-secondary ms-1">
+          <i class="bi bi-x-circle me-1"></i>Καθαρισμός
+        </a>
+        {% endif %}
+      </div>
+      <div class="col-auto ms-auto text-muted small align-self-end">
+        {{ assignments|length }} ανάθεση(-εις)
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Summary Stats -->
+{% if assignments %}
+{% set ns = namespace(total_rental=0, days_total=0, returned=0, active=0) %}
+{% for a in assignments %}
+  {% set ns.total_rental = ns.total_rental + a.rental_cost_total %}
+  {% set ns.days_total = ns.days_total + a.days_deployed %}
+  {% if a.status == 'returned' %}{% set ns.returned = ns.returned + 1 %}{% else %}{% set ns.active = ns.active + 1 %}{% endif %}
+{% endfor %}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card card-dark text-center py-3">
+      <div style="font-size:1.8rem;font-weight:700;color:#c9a84c">{{ assignments|length }}</div>
+      <div class="text-muted small">Συνολικές Αναθέσεις</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card card-dark text-center py-3">
+      <div class="text-success" style="font-size:1.8rem;font-weight:700">{{ ns.active }}</div>
+      <div class="text-muted small">Ενεργές</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card card-dark text-center py-3">
+      <div class="text-secondary" style="font-size:1.8rem;font-weight:700">{{ ns.returned }}</div>
+      <div class="text-muted small">Επεστραμμένες</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card card-dark text-center py-3">
+      <div class="text-warning" style="font-size:1.8rem;font-weight:700">{{ '{:,.0f}'.format(ns.total_rental) }} €</div>
+      <div class="text-muted small">Συνολικό Κόστος Ενοικίου</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Assignments Table -->
+<div class="card card-dark">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-dark table-hover mb-0">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Έργο</th>
+            <th>Εξαρτήματα</th>
+            <th>Ημ. Ανάθεσης</th>
+            <th>Ημ. Επιστροφής</th>
+            <th class="text-end">Ημέρες</th>
+            <th>Τύπος</th>
+            <th class="text-end">Κόστος Ενοικίου</th>
+            <th>Κατάσταση</th>
+            <th>Έλεγχοι</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in assignments %}
+          <tr>
+            <td class="text-muted small">{{ a.id }}</td>
+            <td>
+              {% if a.project %}
+              <span class="text-warning fw-bold">[{{ a.project.code }}]</span>
+              <span class="small ms-1">{{ a.project.title[:30] }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="small">
+              {% for line in a.lines %}
+              <div class="text-muted">
+                {{ line.item.type_label if line.item else '?' }}
+                <span class="text-white">×{{ line.quantity }}</span>
+              </div>
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endfor %}
+            </td>
+            <td class="small">{{ a.date_out.strftime('%d/%m/%Y') if a.date_out else '—' }}</td>
+            <td class="small">
+              {% if a.date_returned %}
+              <span class="text-success">{{ a.date_returned.strftime('%d/%m/%Y') }}</span>
+              {% elif a.date_in_expected %}
+              <span class="text-muted">{{ a.date_in_expected.strftime('%d/%m/%Y') }}</span>
+              <span class="badge bg-secondary ms-1" style="font-size:9px">εκτιμ.</span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="text-end">
+              <span class="{{ 'text-warning' if a.days_deployed > 30 else '' }}">
+                {{ a.days_deployed }}
+              </span>
+            </td>
+            <td>
+              {% if a.is_rented %}
+              <span class="badge bg-warning text-dark"><i class="bi bi-arrow-repeat me-1"></i>Ενοίκιο</span>
+              {% if a.rental_supplier %}
+              <div class="text-muted" style="font-size:10px">{{ a.rental_supplier[:20] }}</div>
+              {% endif %}
+              {% else %}
+              <span class="badge bg-secondary">Ιδιόκτητη</span>
+              {% endif %}
+              <div class="text-muted" style="font-size:10px">
+                {{ 'Εσωτερικά' if a.assembly_by == 'internal' else 'Υπεργολάβος' }}
+              </div>
+            </td>
+            <td class="text-end">
+              {% if a.is_rented and a.rental_cost_total > 0 %}
+              <span class="text-warning">{{ '{:,.0f}'.format(a.rental_cost_total) }} €</span>
+              <div class="text-muted" style="font-size:10px">{{ '{:,.1f}'.format(a.daily_rental_cost) }} €/ημ.</div>
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge bg-{{ a.status_color }}">{{ a.status_label }}</span>
+            </td>
+            <td>
+              {% set inspections = a.inspections.all() if a.inspections is defined else [] %}
+              {% if inspections %}
+              {% set last = inspections[-1] %}
+              <span class="badge bg-{{ last.result_color }}" title="{{ last.inspection_date.strftime('%d/%m/%Y') if last.inspection_date else '' }}">
+                <i class="bi bi-shield-check me-1"></i>{{ last.result|upper }}
+              </span>
+              {% else %}
+              <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="10" class="text-center text-muted py-5">
+              <i class="bi bi-inbox fs-2 d-block mb-2 opacity-25"></i>
+              Δεν βρέθηκαν αναθέσεις.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        {% if assignments %}
+        {% set ns2 = namespace(total=0) %}
+        {% for a in assignments %}{% if a.is_rented %}{% set ns2.total = ns2.total + a.rental_cost_total %}{% endif %}{% endfor %}
+        <tfoot class="border-top border-secondary">
+          <tr class="fw-bold">
+            <td colspan="7" class="text-end text-muted">Σύνολο Κόστους Ενοικίου:</td>
+            <td class="text-end text-warning">{{ '{:,.0f}'.format(ns2.total) }} €</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

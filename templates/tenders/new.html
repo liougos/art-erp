@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Νέος Διαγωνισμός — ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('tenders.index') }}">Διαγωνισμοί</a></li>
+<li class="breadcrumb-item active">Νέος</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><i class="bi bi-plus-circle me-2 text-primary"></i>Νέος Διαγωνισμός</h1>
+</div>
+
+<form method="POST" class="row g-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-info-circle"></i> Βασικά Στοιχεία</div>
+      <div class="card-body row g-3">
+        <div class="col-12">
+          <label class="form-label">Τίτλος Διαγωνισμού *</label>
+          <input type="text" name="title" class="form-control" required placeholder="π.χ. Συντήρηση και Αποκατάσταση Βυζαντινών Τοιχογραφιών…">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Πηγή</label>
+          <select name="source" class="form-select">
+            <option value="Χειροκίνητα">Χειροκίνητα</option>
+            <option value="ΕΣΗΔΗΣ">ΕΣΗΔΗΣ</option>
+            <option value="ΔΙΑΥΓΕΙΑ">ΔΙΑΥΓΕΙΑ</option>
+            <option value="ΚΗΜΔΗΣ">ΚΗΜΔΗΣ</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Προτεραιότητα</label>
+          <select name="priority" class="form-select">
+            <option value="high">🔴 Υψηλή</option>
+            <option value="medium" selected>🟡 Μεσαία</option>
+            <option value="low">🟢 Χαμηλή</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Υπεύθυνος</label>
+          <select name="assigned_to_id" class="form-select">
+            <option value="">— Επιλέξτε —</option>
+            {% for u in users %}
+            <option value="{{ u.id }}">{{ u.full_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="form-label">URL Διαγωνισμού</label>
+          <input type="url" name="source_url" class="form-control" placeholder="https://...">
+        </div>
+        <div class="col-12">
+          <label class="form-label">Περιγραφή / Αντικείμενο</label>
+          <textarea name="description" class="form-control" rows="4" placeholder="Σύντομη περιγραφή του αντικειμένου…"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-building"></i> Αναθέτουσα Αρχή</div>
+      <div class="card-body row g-3">
+        <div class="col-12">
+          <label class="form-label">Επωνυμία Αρχής *</label>
+          <input type="text" name="procuring_authority" class="form-control" placeholder="π.χ. ΕΦΑ Αττικής">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Περιφέρεια / Νομός</label>
+          <input type="text" name="authority_region" class="form-control" placeholder="π.χ. Αττική">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Επικοινωνία</label>
+          <input type="text" name="authority_contact" class="form-control" placeholder="Email / Τηλέφωνο">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-calendar-event"></i> Οικονομικά & Ημερομηνίες</div>
+      <div class="card-body row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Εκτιμώμενος Προϋπολογισμός (€)</label>
+          <input type="number" name="budget_estimate" class="form-control" step="0.01" placeholder="0.00">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Διάρκεια Εκτέλεσης (μήνες)</label>
+          <input type="number" name="execution_months" class="form-control" min="1" placeholder="π.χ. 12">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Ημ. Δημοσίευσης</label>
+          <input type="date" name="publication_date" class="form-control">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Καταληκτική Ημ. Υποβολής *</label>
+          <input type="datetime-local" name="submission_deadline" class="form-control">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">CPV Κωδικός</label>
+          <input type="text" name="cpv_code" class="form-control" placeholder="π.χ. 92521100">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">ΑΔΑΜ</label>
+          <input type="text" name="ada" class="form-control" placeholder="π.χ. 26PROC...">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-journal-text"></i> Σημειώσεις</div>
+      <div class="card-body">
+        <textarea name="notes" class="form-control" rows="3" placeholder="Εσωτερικές σημειώσεις, παρατηρήσεις…"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 d-flex gap-2 justify-content-end">
+    <a href="{{ url_for('tenders.index') }}" class="btn btn-outline-secondary">Ακύρωση</a>
+    <button type="submit" class="btn btn-primary"><i class="bi bi-check2 me-1"></i>Αποθήκευση</button>
+  </div>
+</form>
+{% endblock %}

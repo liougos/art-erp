@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Διαγωνισμοί — ERP{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Διαγωνισμοί</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-file-earmark-ruled me-2 text-primary"></i>Διαγωνισμοί</h1>
+    <p class="page-subtitle">ΕΣΗΔΗΣ · ΔΙΑΥΓΕΙΑ · Ιδιωτικοί</p>
+  </div>
+  <div class="d-flex gap-2">
+    <form method="POST" action="{{ url_for('tenders.search_external') }}" class="d-flex gap-2">
+      <select name="source" class="form-select form-select-sm" style="width:auto">
+        <option value="diavgeia">ΔΙΑΥΓΕΙΑ</option>
+        <option value="esidis">ΕΣΗΔΗΣ</option>
+      </select>
+      <button class="btn btn-sm btn-outline-primary"><i class="bi bi-search me-1"></i>Αυτόματη Αναζήτηση</button>
+    </form>
+    <a href="{{ url_for('tenders.new') }}" class="btn btn-gold"><i class="bi bi-plus-lg me-1"></i>Νέος Διαγωνισμός</a>
+  </div>
+</div>
+
+<!-- Status pills -->
+<div class="stat-row">
+  <a href="{{ url_for('tenders.index') }}" class="stat-pill {% if not status %}active{% endif %}">
+    Όλοι <strong>{{ counts.values()|sum }}</strong>
+  </a>
+  {% set labels = {'new':'Νέος','analysis':'Ανάλυση','offer_prep':'Προσφορά','submitted':'Υποβλήθηκε','won':'Κερδήθηκε','lost':'Χάθηκε','cancelled':'Ακυρώθηκε','no_bid':'Δεν Διαγωνιστήκαμε'} %}
+  {% for s, label in labels.items() %}
+  <a href="{{ url_for('tenders.index', status=s) }}" class="stat-pill {% if status==s %}active{% endif %}">
+    {{ label }} <strong>{{ counts.get(s,0) }}</strong>
+  </a>
+  {% endfor %}
+</div>
+
+<!-- Toolbar -->
+<div class="toolbar">
+  <div class="search-box">
+    <i class="bi bi-search"></i>
+    <form method="GET"><input name="q" class="form-control form-control-sm" placeholder="Αναζήτηση τίτλου…" value="{{ q }}"></form>
+  </div>
+  <select class="form-select form-select-sm" style="width:auto" onchange="location.href='{{ url_for('tenders.index') }}?priority='+this.value+'&status={{ status }}'">
+    <option value="">Προτεραιότητα</option>
+    <option value="high" {% if priority=='high' %}selected{% endif %}>Υψηλή</option>
+    <option value="medium" {% if priority=='medium' %}selected{% endif %}>Μεσαία</option>
+    <option value="low" {% if priority=='low' %}selected{% endif %}>Χαμηλή</option>
+  </select>
+  <select class="form-select form-select-sm" style="width:auto" onchange="location.href='{{ url_for('tenders.index') }}?source='+this.value+'&status={{ status }}'">
+    <option value="">Πηγή</option>
+    <option value="ΕΣΗΔΗΣ" {% if source=='ΕΣΗΔΗΣ' %}selected{% endif %}>ΕΣΗΔΗΣ</option>
+    <option value="ΔΙΑΥΓΕΙΑ" {% if source=='ΔΙΑΥΓΕΙΑ' %}selected{% endif %}>ΔΙΑΥΓΕΙΑ</option>
+    <option value="Χειροκίνητα" {% if source=='Χειροκίνητα' %}selected{% endif %}>Χειροκίνητα</option>
+  </select>
+</div>
+
+<!-- Table -->
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr>
+        <th>Τίτλος</th>
+        <th>Αναθέτουσα Αρχή</th>
+        <th>Προϋπολογισμός</th>
+        <th>Προθεσμία</th>
+        <th>Κατάσταση</th>
+        <th>Προτερ.</th>
+        <th>Πηγή</th>
+        <th></th>
+      </tr></thead>
+      <tbody>
+        {% for t in tenders %}
+        {% set days = t.days_to_deadline %}
+        <tr>
+          <td style="max-width:280px">
+            <a href="{{ url_for('tenders.detail', id=t.id) }}" class="fw-semibold text-decoration-none text-dark">
+              {{ t.title[:80] }}{% if t.title|length > 80 %}…{% endif %}
+            </a>
+            {% if t.ada %}<div class="text-muted" style="font-size:11px">ΑΔΑΜ: {{ t.ada }}</div>{% endif %}
+          </td>
+          <td style="max-width:180px">
+            <span class="text-truncate d-block" style="max-width:180px">{{ t.procuring_authority or '—' }}</span>
+            {% if t.authority_region %}<small class="text-muted">{{ t.authority_region }}</small>{% endif %}
+          </td>
+          <td class="fw-semibold">
+            {% if t.budget_estimate %}{{ '{:,.0f}'.format(t.budget_estimate|float) }}€{% else %}—{% endif %}
+          </td>
+          <td>
+            {% if t.submission_deadline %}
+            <div>{{ t.submission_deadline.strftime('%d/%m/%Y') }}</div>
+            {% if days is not none %}
+            <small class="{% if days < 0 %}days-expired{% elif days <= 7 %}days-urgent{% elif days <= 14 %}days-warning{% else %}days-ok{% endif %}">
+              {% if days < 0 %}Έληξε{% elif days == 0 %}Σήμερα!{% else %}{{ days }} ημέρες{% endif %}
+            </small>
+            {% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td><span class="badge status-{{ t.status }}">{{ t.status_label }}</span></td>
+          <td><span class="badge priority-{{ t.priority }}">{{ {'high':'Υψηλή','medium':'Μεσαία','low':'Χαμηλή'}.get(t.priority,t.priority) }}</span></td>
+          <td><small class="text-muted">{{ t.source or '—' }}</small></td>
+          <td>
+            <div class="d-flex gap-1">
+              <a href="{{ url_for('tenders.detail', id=t.id) }}" class="btn btn-sm btn-outline-primary" title="Λεπτομέρειες"><i class="bi bi-eye"></i></a>
+              <a href="{{ url_for('tenders.edit', id=t.id) }}" class="btn btn-sm btn-outline-secondary" title="Επεξεργασία"><i class="bi bi-pencil"></i></a>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8">
+            <div class="empty-state">
+              <i class="bi bi-file-earmark-x d-block"></i>
+              <h5>Δεν βρέθηκαν διαγωνισμοί</h5>
+              <p class="text-muted">Προσθέστε χειροκίνητα ή κάντε αυτόματη αναζήτηση από ΕΣΗΔΗΣ / ΔΙΑΥΓΕΙΑ.</p>
+              <a href="{{ url_for('tenders.new') }}" class="btn btn-primary">Νέος Διαγωνισμός</a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

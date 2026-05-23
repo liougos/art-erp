@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Αναφορές Εργαζομένων — ERP{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Αναφορές Εργαζομένων</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-journal-text me-2 text-primary"></i>Αναφορές Εργαζομένων</h1>
+    <p class="page-subtitle">Ημερήσιες αναφορές προόδου από το συνεργείο</p>
+  </div>
+  {% if pending_count > 0 %}
+  <span class="badge bg-warning text-dark fs-6"><i class="bi bi-clock me-1"></i>{{ pending_count }} εκκρεμείς</span>
+  {% endif %}
+</div>
+
+<!-- Filters -->
+<div class="toolbar">
+  <form method="GET" class="d-flex gap-2 flex-wrap align-items-center w-100">
+    <select name="project_id" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <option value="">Όλα τα Έργα</option>
+      {% for p in projects %}<option value="{{ p.id }}" {% if project_id==p.id|string %}selected{% endif %}>{{ p.code }}</option>{% endfor %}
+    </select>
+    <select name="employee_id" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <option value="">Όλοι οι Εργαζόμενοι</option>
+      {% for e in employees %}<option value="{{ e.id }}" {% if employee_id==e.id|string %}selected{% endif %}>{{ e.full_name }}</option>{% endfor %}
+    </select>
+    <select name="status" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <option value="">Κατάσταση</option>
+      <option value="pending" {% if status=='pending' %}selected{% endif %}>Εκκρεμείς</option>
+      <option value="approved" {% if status=='approved' %}selected{% endif %}>Εγκεκριμένες</option>
+      <option value="rejected" {% if status=='rejected' %}selected{% endif %}>Απορριφθείσες</option>
+    </select>
+    <a href="{{ url_for('worker.all_reports') }}" class="btn btn-sm btn-outline-secondary">Καθαρισμός</a>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr>
+        <th>Ημ/νία</th><th>Υπάλληλος</th><th>Έργο</th><th>Εργασίες</th>
+        <th>Ώρες</th><th>Πρόοδος</th><th>Κατάσταση</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for r in reports %}
+        <tr class="{% if r.status=='pending' %}table-warning{% endif %}">
+          <td><small class="fw-semibold">{{ r.report_date.strftime('%d/%m/%Y') }}</small></td>
+          <td>
+            <div style="font-size:13px">{{ r.employee.full_name }}</div>
+            {% if r.weather %}<small class="text-muted">{{ r.weather }}</small>{% endif %}
+          </td>
+          <td><span class="badge bg-light text-dark border">{{ r.project.code }}</span></td>
+          <td class="text-truncate" style="max-width:220px"><small>{{ r.work_done[:80] }}{% if r.work_done|length > 80 %}…{% endif %}</small></td>
+          <td><small>{{ r.hours_worked }}h × {{ r.workers_present }}🧑</small></td>
+          <td>
+            {% if r.progress_pct is not none %}
+            <div class="d-flex align-items-center gap-1">
+              <div class="progress flex-fill" style="height:6px;min-width:50px">
+                <div class="progress-bar" style="width:{{ r.progress_pct }}%"></div>
+              </div>
+              <small>{{ r.progress_pct }}%</small>
+            </div>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            <span class="badge {% if r.status=='approved' %}status-active{% elif r.status=='rejected' %}bg-danger{% else %}status-pending{% endif %}">
+              {{ {'pending':'Εκκρεμεί','approved':'Εγκρίθηκε','rejected':'Απορρίφθηκε'}.get(r.status, r.status) }}
+            </span>
+          </td>
+          <td>
+            <a href="{{ url_for('worker.view_report', id=r.id) }}" class="btn btn-sm btn-outline-primary">
+              {% if r.status=='pending' %}<i class="bi bi-clipboard-check"></i>{% else %}<i class="bi bi-eye"></i>{% endif %}
+            </a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8"><div class="empty-state"><i class="bi bi-journal-text d-block"></i><h5>Δεν υπάρχουν αναφορές</h5></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

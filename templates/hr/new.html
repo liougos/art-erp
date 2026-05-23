@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Νέος Υπάλληλος — ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('hr.index') }}">HR</a></li>
+<li class="breadcrumb-item active">Νέος Υπάλληλος</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><i class="bi bi-person-plus me-2 text-primary"></i>Νέος Υπάλληλος</h1>
+</div>
+
+<form method="POST" enctype="multipart/form-data" class="row g-3">
+  <div class="col-lg-8">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-person"></i> Προσωπικά Στοιχεία</div>
+      <div class="card-body row g-3">
+        <div class="col-md-5"><label class="form-label">Επώνυμο *</label><input type="text" name="last_name" class="form-control" required></div>
+        <div class="col-md-5"><label class="form-label">Όνομα *</label><input type="text" name="first_name" class="form-control" required></div>
+        <div class="col-md-2"><label class="form-label">Φωτογραφία</label><input type="file" name="photo" class="form-control" accept="image/*"></div>
+        <div class="col-md-4"><label class="form-label">ΑΦΜ</label><input type="text" name="afm" class="form-control" maxlength="9"></div>
+        <div class="col-md-4"><label class="form-label">ΑΜΚΑ</label><input type="text" name="amka" class="form-control" maxlength="11"></div>
+        <div class="col-md-4"><label class="form-label">IBAN</label><input type="text" name="iban" class="form-control" placeholder="GR..."></div>
+        <div class="col-md-6"><label class="form-label">Τηλέφωνο</label><input type="tel" name="phone" class="form-control"></div>
+        <div class="col-md-6"><label class="form-label">Email</label><input type="email" name="email" class="form-control"></div>
+        <div class="col-12"><label class="form-label">Διεύθυνση</label><input type="text" name="address" class="form-control"></div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-briefcase"></i> Εργασιακά Στοιχεία</div>
+      <div class="card-body row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Ειδικότητα *</label>
+          <select name="specialty" class="form-select">
+            <option value="">— Επιλέξτε —</option>
+            {% for s in specialties %}<option>{{ s }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Τύπος Απασχόλησης</label>
+          <select name="employment_type" class="form-select">
+            <option value="full-time">Πλήρης Απασχόληση</option>
+            <option value="part-time">Μερική Απασχόληση</option>
+            <option value="freelance">Freelance / Αυτοαπασχολούμενος</option>
+            <option value="seasonal">Εποχιακός</option>
+          </select>
+        </div>
+        <div class="col-md-4"><label class="form-label">Μισθός (€/μήνα)</label><input type="number" name="basic_salary" class="form-control" step="0.01"></div>
+        <div class="col-md-4"><label class="form-label">Έναρξη Σύμβασης</label><input type="date" name="contract_start" class="form-control"></div>
+        <div class="col-md-4"><label class="form-label">Λήξη Σύμβασης</label><input type="date" name="contract_end" class="form-control"></div>
+        <div class="col-12"><label class="form-label">Δεξιότητες (χωρισμένες με κόμμα)</label><input type="text" name="skills" class="form-control" placeholder="π.χ. Τοιχογραφίες, XRF, Φωτογράφηση, Scaffolding"></div>
+        <div class="col-12"><label class="form-label">Πιστοποιήσεις</label><textarea name="certifications" class="form-control" rows="2" placeholder="π.χ. Πτυχίο ΑΠΘ Συντήρησης…"></textarea></div>
+        <div class="col-12"><label class="form-label">Εκπαίδευση</label><textarea name="education" class="form-control" rows="2"></textarea></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><i class="bi bi-telephone-plus"></i> Επαφή Έκτακτης Ανάγκης</div>
+      <div class="card-body row g-3">
+        <div class="col-md-6"><label class="form-label">Όνομα</label><input type="text" name="emergency_contact_name" class="form-control"></div>
+        <div class="col-md-6"><label class="form-label">Τηλέφωνο</label><input type="tel" name="emergency_contact_phone" class="form-control"></div>
+        <div class="col-12"><label class="form-label">Σημειώσεις</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card position-sticky" style="top:80px">
+      <div class="card-body text-center py-4">
+        <i class="bi bi-person-circle display-1 text-muted opacity-25 mb-3 d-block"></i>
+        <p class="text-muted small">Συμπληρώστε τα στοιχεία και αποθηκεύστε τον υπάλληλο.</p>
+        <button type="submit" class="btn btn-primary w-100 mb-2"><i class="bi bi-check2 me-1"></i>Αποθήκευση</button>
+        <a href="{{ url_for('hr.index') }}" class="btn btn-outline-secondary w-100">Ακύρωση</a>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}

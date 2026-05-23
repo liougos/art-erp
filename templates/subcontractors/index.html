@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Υπεργολάβοι — ART ERP{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Υπεργολάβοι</li>{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h2 class="page-title mb-0"><i class="bi bi-person-gear me-2 text-warning"></i>Υπεργολάβοι</h2>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('subcontractors.all_worklogs') }}" class="btn btn-outline-warning btn-sm">
+      <i class="bi bi-journal-check me-1"></i>Αναφορές Εκκρεμείς
+    </a>
+    <button class="btn btn-gold" data-bs-toggle="modal" data-bs-target="#modalNew">
+      <i class="bi bi-plus-lg me-1"></i>Νέος Υπεργολάβος
+    </button>
+  </div>
+</div>
+
+<!-- Specialty filter -->
+<div class="card card-dark mb-3">
+  <div class="card-body py-2">
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{{ url_for('subcontractors.index') }}" class="btn btn-sm {% if not specialty %}btn-gold{% else %}btn-outline-secondary{% endif %}">Όλοι</a>
+      {% for k,v in specialties %}
+      <a href="{{ url_for('subcontractors.index', specialty=k) }}" class="btn btn-sm {% if specialty==k %}btn-gold{% else %}btn-outline-secondary{% endif %}">{{ v }}</a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  {% for sub in subs %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card card-dark h-100 border-secondary">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div>
+            <h6 class="mb-0">
+              <a href="{{ url_for('subcontractors.detail', id=sub.id) }}" class="text-warning text-decoration-none">
+                {{ sub.company_name }}
+              </a>
+            </h6>
+            <span class="badge bg-secondary small">{{ sub.specialty_label }}</span>
+          </div>
+          <div>
+            {% for i in range(sub.rating or 0) %}<i class="bi bi-star-fill text-warning" style="font-size:10px"></i>{% endfor %}
+            {% for i in range(5 - (sub.rating or 0)) %}<i class="bi bi-star text-muted" style="font-size:10px"></i>{% endfor %}
+          </div>
+        </div>
+
+        <div class="text-muted small">
+          {% if sub.contact_name %}<div><i class="bi bi-person me-1"></i>{{ sub.contact_name }}</div>{% endif %}
+          {% if sub.phone %}<div><i class="bi bi-telephone me-1"></i>{{ sub.phone }}</div>{% endif %}
+          {% if sub.email %}<div><i class="bi bi-envelope me-1"></i>{{ sub.email }}</div>{% endif %}
+        </div>
+
+        {% if sub.insurance_expiry %}
+        <div class="mt-2">
+          {% if sub.insurance_ok %}
+          <span class="badge bg-success"><i class="bi bi-shield-check me-1"></i>Ασφάλεια OK έως {{ sub.insurance_expiry.strftime('%d/%m/%Y') }}</span>
+          {% else %}
+          <span class="badge bg-danger"><i class="bi bi-shield-x me-1"></i>Ασφάλεια Ληγμένη!</span>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="mt-2 d-flex gap-2">
+          {% set active_c = sub.contracts.filter_by(status='active').count() %}
+          <span class="badge bg-{{ 'success' if active_c > 0 else 'secondary' }}">
+            {{ active_c }} ενεργές συμβάσεις
+          </span>
+          {% if sub.portal_username %}
+          <span class="badge bg-primary"><i class="bi bi-globe me-1"></i>Portal</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="card-footer border-secondary py-2">
+        <a href="{{ url_for('subcontractors.detail', id=sub.id) }}" class="btn btn-sm btn-outline-secondary w-100">
+          <i class="bi bi-eye me-1"></i>Προβολή
+        </a>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12 text-center text-muted py-5">
+    <i class="bi bi-person-gear fs-1 d-block mb-2 opacity-25"></i>
+    <p>Δεν βρέθηκαν υπεργολάβοι.</p>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- New Modal -->
+<div class="modal fade" id="modalNew" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-person-plus me-2 text-warning"></i>Νέος Υπεργολάβος</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('subcontractors.new') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-8"><label class="form-label">Επωνυμία *</label>
+              <input type="text" name="company_name" class="form-control bg-dark text-white border-secondary" required></div>
+            <div class="col-md-4"><label class="form-label">ΑΦΜ</label>
+              <input type="text" name="afm" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-md-6"><label class="form-label">Υπεύθυνος</label>
+              <input type="text" name="contact_name" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-md-3"><label class="form-label">Τηλέφωνο</label>
+              <input type="text" name="phone" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-md-3"><label class="form-label">Email</label>
+              <input type="email" name="email" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-md-6"><label class="form-label">Ειδικότητα</label>
+              <select name="specialty" class="form-select bg-dark text-white border-secondary">
+                {% for k,v in specialties %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+              </select></div>
+            <div class="col-md-3"><label class="form-label">Αρ. Ασφάλειας</label>
+              <input type="text" name="insurance_number" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-md-3"><label class="form-label">Λήξη Ασφάλειας</label>
+              <input type="date" name="insurance_expiry" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-12"><hr class="border-secondary"><p class="text-muted small mb-2"><i class="bi bi-globe me-1"></i>Portal Πρόσβαση (προαιρετικό)</p></div>
+            <div class="col-md-6"><label class="form-label">Username Portal</label>
+              <input type="text" name="portal_username" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-md-6"><label class="form-label">Password Portal</label>
+              <input type="password" name="portal_password" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-12"><label class="form-label">Σημειώσεις</label>
+              <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="2"></textarea></div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-gold">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

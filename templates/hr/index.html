@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Ανθρώπινο Δυναμικό — ERP{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Ανθρώπινο Δυναμικό</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-people me-2 text-primary"></i>Ανθρώπινο Δυναμικό</h1>
+    <p class="page-subtitle">Προσωπικό, Βιογραφικά, Συμβόλαια</p>
+  </div>
+  <a href="{{ url_for('hr.new') }}" class="btn btn-gold"><i class="bi bi-person-plus me-1"></i>Νέος Υπάλληλος</a>
+</div>
+
+<!-- Filters -->
+<div class="toolbar">
+  <form method="GET" class="d-flex gap-2 flex-wrap align-items-center w-100">
+    <div class="search-box">
+      <i class="bi bi-search"></i>
+      <input name="q" class="form-control form-control-sm" placeholder="Αναζήτηση ονόματος…" value="{{ q }}">
+    </div>
+    <select name="status" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <option value="active" {% if status=='active' %}selected{% endif %}>Ενεργοί</option>
+      <option value="" {% if not status %}selected{% endif %}>Όλοι</option>
+      <option value="inactive" {% if status=='inactive' %}selected{% endif %}>Ανενεργοί</option>
+      <option value="terminated" {% if status=='terminated' %}selected{% endif %}>Απολυθέντες</option>
+    </select>
+    <select name="specialty" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <option value="">Ειδικότητα</option>
+      {% for s in specialties %}<option value="{{ s }}" {% if specialty==s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-search"></i></button>
+  </form>
+</div>
+
+<div class="row g-3">
+  {% for emp in employees %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-3 mb-3">
+          {% if emp.photo_path %}
+          <img src="{{ url_for('static', filename='uploads/' + emp.photo_path) }}" class="rounded-circle" width="56" height="56" style="object-fit:cover">
+          {% else %}
+          <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center text-white fw-bold" style="width:56px;height:56px;font-size:20px;flex-shrink:0">
+            {{ emp.first_name[0] }}{{ emp.last_name[0] }}
+          </div>
+          {% endif %}
+          <div class="overflow-hidden">
+            <div class="fw-bold fs-6">
+              <a href="{{ url_for('hr.employee', id=emp.id) }}" class="text-decoration-none text-dark">{{ emp.full_name }}</a>
+            </div>
+            <div class="text-muted small">{{ emp.specialty or '—' }}</div>
+            <span class="badge {% if emp.status=='active' %}status-active{% elif emp.status=='inactive' %}bg-secondary{% else %}status-cancelled{% endif %}" style="font-size:10px">
+              {{ {'active':'Ενεργός','inactive':'Ανενεργός','terminated':'Απολύθηκε','on_leave':'Άδεια'}.get(emp.status, emp.status) }}
+            </span>
+          </div>
+        </div>
+
+        <div class="row g-1" style="font-size:12.5px">
+          {% if emp.phone %}
+          <div class="col-12"><i class="bi bi-telephone text-muted me-2"></i><a href="tel:{{ emp.phone }}">{{ emp.phone }}</a></div>
+          {% endif %}
+          {% if emp.email %}
+          <div class="col-12"><i class="bi bi-envelope text-muted me-2"></i><a href="mailto:{{ emp.email }}">{{ emp.email }}</a></div>
+          {% endif %}
+          <div class="col-12"><i class="bi bi-briefcase text-muted me-2"></i>
+            {{ {'full-time':'Πλήρης Απασχόληση','part-time':'Μερική','freelance':'Freelance','seasonal':'Εποχιακός'}.get(emp.employment_type, emp.employment_type or '—') }}
+          </div>
+          {% if emp.contract_end %}
+          <div class="col-12">
+            <i class="bi bi-calendar-x text-muted me-2"></i>
+            <span {% if (emp.contract_end - today).days <= 30 %}class="text-danger fw-semibold"{% endif %}>
+              Σύμβαση έως {{ emp.contract_end.strftime('%d/%m/%Y') }}
+            </span>
+          </div>
+          {% endif %}
+        </div>
+
+        {% if emp.skills %}
+        <div class="mt-2">
+          {% for skill in emp.skills.split(',')[:4] %}
+          <span class="badge bg-light text-dark border me-1" style="font-size:10px">{{ skill.strip() }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <div class="card-footer bg-transparent d-flex gap-2">
+        <a href="{{ url_for('hr.employee', id=emp.id) }}" class="btn btn-sm btn-primary flex-fill"><i class="bi bi-person-lines-fill me-1"></i>Προφίλ</a>
+        <span class="btn btn-sm btn-outline-secondary" title="Βιογραφικά">
+          <i class="bi bi-file-person"></i> {{ emp.cvs.count() }}
+        </span>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12">
+    <div class="empty-state">
+      <i class="bi bi-people d-block"></i>
+      <h5>Δεν υπάρχουν υπάλληλοι</h5>
+      <a href="{{ url_for('hr.new') }}" class="btn btn-primary mt-2">Προσθήκη Πρώτου Υπαλλήλου</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

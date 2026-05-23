@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block title %}Νομικό — ERP{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Νομικό</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-shield-lock me-2 text-primary"></i>Νομικό Τμήμα</h1>
+    <p class="page-subtitle">Συμβόλαια, Ασφάλειες, Άδειες, Πιστοποιητικά</p>
+  </div>
+  <button class="btn btn-gold" data-bs-toggle="modal" data-bs-target="#addLegalModal">
+    <i class="bi bi-plus-lg me-1"></i>Νέο Έγγραφο
+  </button>
+</div>
+
+{% if expiring %}
+<div class="row g-2 mb-3">
+  {% for d in expiring %}
+  <div class="col-md-6">
+    <div class="alert alert-{% if d.days_to_expiry <= 14 %}danger{% else %}warning{% endif %} d-flex align-items-center gap-2 mb-0 py-2">
+      <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+      <div>
+        <strong>{{ d.title }}</strong> — {{ d.doc_type }}
+        <small class="d-block">Λήξη: {{ d.expiry_date.strftime('%d/%m/%Y') }} ·
+          {% if d.days_to_expiry > 0 %}{{ d.days_to_expiry }} ημέρες{% else %}<strong>ΕΛΗΞΕ</strong>{% endif %}
+        </small>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Filters -->
+<div class="toolbar">
+  <form method="GET" class="d-flex gap-2 flex-wrap align-items-center w-100">
+    <div class="search-box"><i class="bi bi-search"></i><input name="q" class="form-control form-control-sm" placeholder="Αναζήτηση…" value="{{ q }}"></div>
+    <select name="type" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <option value="">Τύπος</option>
+      {% for t in doc_types %}<option value="{{ t }}" {% if doc_type==t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+    </select>
+    <select name="status" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <option value="">Κατάσταση</option>
+      <option value="active" {% if status=='active' %}selected{% endif %}>Ενεργό</option>
+      <option value="expired" {% if status=='expired' %}selected{% endif %}>Ληγμένο</option>
+      <option value="terminated" {% if status=='terminated' %}selected{% endif %}>Λήξαν</option>
+    </select>
+    <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-search"></i></button>
+    <a href="{{ url_for('legal.index') }}" class="btn btn-sm btn-outline-secondary">Καθαρισμός</a>
+  </form>
+</div>
+
+<!-- Summary KPIs -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon blue"><i class="bi bi-file-text"></i></div>
+      <div><div class="kpi-value">{{ docs|length }}</div><div class="kpi-label">Σύνολο Εγγράφων</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon green"><i class="bi bi-check-circle"></i></div>
+      <div><div class="kpi-value">{{ docs|selectattr('status','eq','active')|list|length }}</div><div class="kpi-label">Ενεργά</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon orange"><i class="bi bi-clock-history"></i></div>
+      <div><div class="kpi-value">{{ expiring|length }}</div><div class="kpi-label">Λήγουν σε 60 μέρες</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon red"><i class="bi bi-x-circle"></i></div>
+      <div><div class="kpi-value">{{ docs|selectattr('status','eq','expired')|list|length }}</div><div class="kpi-label">Ληγμένα</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr>
+        <th>Τίτλος</th><th>Τύπος</th><th>Μέρη / Ασφαλιστής</th>
+        <th>Αξία</th><th>Υπογραφή</th><th>Λήξη</th><th>Έργο</th><th>Κατάσταση</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for d in docs %}
+        <tr class="{% if d.days_to_expiry is not none and d.days_to_expiry <= 0 %}table-danger{% elif d.days_to_expiry is not none and d.days_to_expiry <= 30 %}table-warning{% endif %}">
+          <td>
+            <div class="fw-semibold">{{ d.title }}</div>
+            {% if d.lawyer_name %}<small class="text-muted"><i class="bi bi-person me-1"></i>{{ d.lawyer_name }}</small>{% endif %}
+          </td>
+          <td><span class="badge bg-light text-dark border" style="font-size:11px">{{ d.doc_type or '—' }}</span></td>
+          <td><small>{{ d.parties or '—' }}</small></td>
+          <td>{% if d.value %}{{ '{:,.0f}'.format(d.value|float) }}€{% else %}—{% endif %}</td>
+          <td><small>{{ d.signing_date.strftime('%d/%m/%Y') if d.signing_date else '—' }}</small></td>
+          <td>
+            {% if d.expiry_date %}
+            <small class="{% if d.days_to_expiry is not none and d.days_to_expiry <= 0 %}text-danger fw-bold{% elif d.days_to_expiry is not none and d.days_to_expiry <= 30 %}text-warning fw-semibold{% endif %}">
+              {{ d.expiry_date.strftime('%d/%m/%Y') }}
+              {% if d.days_to_expiry is not none and d.days_to_expiry > 0 %}
+              <span class="text-muted">({{ d.days_to_expiry }}η)</span>
+              {% elif d.days_to_expiry is not none %}
+              <strong>ΕΛΗΞΕ</strong>
+              {% endif %}
+            </small>
+            {% else %}—{% endif %}
+          </td>
+          <td><small>{{ d.project.code if d.project else '—' }}</small></td>
+          <td>
+            <span class="badge {% if d.status=='active' %}status-active{% elif d.status=='expired' %}bg-danger{% else %}bg-secondary{% endif %}">
+              {{ {'active':'Ενεργό','expired':'Ληγμένο','terminated':'Λήξαν','draft':'Προσχέδιο','disputed':'Αμφισβητούμενο'}.get(d.status, d.status) }}
+            </span>
+          </td>
+          <td>
+            <div class="d-flex gap-1">
+              {% if d.file_path %}
+              <a href="{{ url_for('legal.download', id=d.id) }}" class="btn btn-sm btn-outline-primary" title="Λήψη"><i class="bi bi-download"></i></a>
+              {% endif %}
+              <form method="POST" action="{{ url_for('legal.delete', id=d.id) }}" class="d-inline">
+                <button class="btn btn-sm btn-outline-danger" data-confirm="Διαγραφή εγγράφου;"><i class="bi bi-trash"></i></button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9"><div class="empty-state"><i class="bi bi-shield-lock d-block"></i><h5>Δεν υπάρχουν νομικά έγγραφα</h5></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add Legal Document Modal -->
+<div class="modal fade" id="addLegalModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('legal.new') }}" enctype="multipart/form-data">
+        <div class="modal-header"><h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Νέο Νομικό Έγγραφο</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body row g-3">
+          <div class="col-md-8"><label class="form-label">Τίτλος *</label><input type="text" name="title" class="form-control" required placeholder="π.χ. Σύμβαση Υπεργολαβίας Αθήνα 2025"></div>
+          <div class="col-md-4">
+            <label class="form-label">Τύπος *</label>
+            <select name="doc_type" class="form-select" required>
+              <option value="">— Επιλέξτε —</option>
+              {% for t in doc_types %}<option>{{ t }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-12"><label class="form-label">Αντισυμβαλλόμενοι / Μέρη</label><input type="text" name="parties" class="form-control" placeholder="π.χ. ΕΦΑ Αττικής, ART RESTORATION AE"></div>
+          <div class="col-md-4"><label class="form-label">Αξία / Ασφάλιστρο (€)</label><input type="number" name="value" class="form-control" step="0.01"></div>
+          <div class="col-md-4"><label class="form-label">Ημ. Υπογραφής</label><input type="date" name="signing_date" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label">Ημ. Λήξης</label><input type="date" name="expiry_date" class="form-control"></div>
+          <div class="col-md-6">
+            <label class="form-label">Κατάσταση</label>
+            <select name="status" class="form-select">
+              <option value="active">Ενεργό</option>
+              <option value="draft">Προσχέδιο</option>
+              <option value="expired">Ληγμένο</option>
+              <option value="terminated">Λήξαν</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Σχετικό Έργο</label>
+            <select name="project_id" class="form-select">
+              <option value="">— Κανένα —</option>
+              {% for p in projects %}<option value="{{ p.id }}">{{ p.code }} — {{ p.title[:40] }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6"><label class="form-label">Δικηγόρος / Υπεύθυνος</label><input type="text" name="lawyer_name" class="form-control"></div>
+          <div class="col-md-6"><label class="form-label">Ημ. Υπενθύμισης</label><input type="date" name="reminder_date" class="form-control"></div>
+          <div class="col-12"><label class="form-label">Αρχείο (PDF/DOC)</label><input type="file" name="doc_file" class="form-control" accept=".pdf,.doc,.docx,.jpg,.png"></div>
+          <div class="col-12"><label class="form-label">Σημειώσεις</label><textarea name="notes" class="form-control" rows="3"></textarea></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button><button type="submit" class="btn btn-primary">Αποθήκευση</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- AI Legal Chat -->
+<div class="card mt-4" id="ai-chat-card">
+  <div class="card-header d-flex align-items-center gap-2">
+    <i class="bi bi-robot text-warning"></i>
+    <strong>AI Νομικός Σύμβουλος</strong>
+    <span class="badge bg-warning text-dark ms-1" style="font-size:10px">Beta · Claude AI</span>
+  </div>
+  <div class="card-body">
+    <div id="chat-messages" style="height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:8px;background:#fafaf8;border-radius:8px;border:1px solid var(--border)" class="mb-3">
+      <div class="d-flex gap-2 align-items-start">
+        <div class="rounded-circle bg-warning d-flex align-items-center justify-content-center flex-shrink-0" style="width:30px;height:30px">
+          <i class="bi bi-robot" style="font-size:13px;color:#111"></i>
+        </div>
+        <div class="p-2 rounded" style="background:#fff;border:1px solid #e2e8f0;max-width:85%;font-size:13px">
+          Γεια σας! Είμαι ο AI νομικός σύμβουλός σας. Ρωτήστε με για συμβόλαια, δημόσιες συμβάσεις, εργατικό δίκαιο, αρχαιολογικό νόμο κ.ά.
+        </div>
+      </div>
+    </div>
+    <div class="input-group">
+      <input type="text" id="chat-input" class="form-control" placeholder="π.χ. 'Τι ισχύει για εγγυητικές επιστολές στον ν.4412/2016;'" onkeydown="if(event.key==='Enter')sendLegalChat()">
+      <button class="btn btn-warning" onclick="sendLegalChat()" id="chat-btn" title="Αποστολή">
+        <i class="bi bi-send" style="color:#111"></i>
+      </button>
+    </div>
+    <small class="text-muted mt-1 d-block"><i class="bi bi-exclamation-triangle me-1"></i>Για οριστικές αποφάσεις συμβουλευτείτε δικηγόρο.</small>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function sendLegalChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  const box = document.getElementById('chat-messages');
+  const btn = document.getElementById('chat-btn');
+
+  box.innerHTML += `<div class="d-flex gap-2 align-items-start flex-row-reverse">
+    <div class="rounded-circle bg-dark d-flex align-items-center justify-content-center flex-shrink-0" style="width:30px;height:30px">
+      <i class="bi bi-person" style="font-size:13px;color:#c9a84c"></i>
+    </div>
+    <div class="p-2 rounded" style="background:#111;color:#c9a84c;max-width:85%;font-size:13px">${msg.replace(/</g,'&lt;')}</div>
+  </div>`;
+  box.scrollTop = box.scrollHeight;
+  input.value = '';
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm" style="color:#111"></span>';
+
+  try {
+    const resp = await fetch('{{ url_for("legal.ai_chat") }}', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({message: msg})
+    });
+    const data = await resp.json();
+    const answer = data.answer || data.error || 'Σφάλμα επικοινωνίας.';
+    box.innerHTML += `<div class="d-flex gap-2 align-items-start">
+      <div class="rounded-circle bg-warning d-flex align-items-center justify-content-center flex-shrink-0" style="width:30px;height:30px">
+        <i class="bi bi-robot" style="font-size:13px;color:#111"></i>
+      </div>
+      <div class="p-2 rounded" style="background:#fff;border:1px solid #e2e8f0;max-width:85%;font-size:13px;white-space:pre-wrap">${answer.replace(/</g,'&lt;')}</div>
+    </div>`;
+    box.scrollTop = box.scrollHeight;
+  } catch(e) {
+    box.innerHTML += `<div class="text-danger small p-2">Σφάλμα σύνδεσης.</div>`;
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-send" style="color:#111"></i>';
+}
+</script>
+{% endblock %}

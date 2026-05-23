@@ -1,0 +1,448 @@
+{% extends "base.html" %}
+{% block title %}{{ dp.title[:40] }} — Σχεδιασμός{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('design.index') }}">Σχεδιασμός</a></li>
+<li class="breadcrumb-item active">{{ dp.title[:40] }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h2 class="page-title mb-1">
+      <i class="bi bi-pencil-square me-2 text-warning"></i>{{ dp.title }}
+    </h2>
+    <div class="d-flex gap-2 align-items-center">
+      <span class="badge bg-{{ dp.status_color }} fs-6">{{ dp.status_label }}</span>
+      <span class="badge bg-{{ dp.priority_color }}">{{ dp.priority }}</span>
+      <span class="badge bg-secondary">{{ dp.type_label }}</span>
+      {% if dp.project %}
+      <a href="{{ url_for('projects.detail', id=dp.project.id) }}" class="badge bg-warning text-dark text-decoration-none">
+        <i class="bi bi-folder2 me-1"></i>[{{ dp.project.code }}] {{ dp.project.title[:25] }}
+      </a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#modalEdit">
+      <i class="bi bi-pencil me-1"></i>Επεξεργασία
+    </button>
+    <a href="{{ url_for('design.index') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Πίσω
+    </a>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Left: Info + Revisions -->
+  <div class="col-lg-8">
+
+    <!-- Info card -->
+    <div class="card card-dark mb-4">
+      <div class="card-header border-secondary"><h6 class="mb-0">Στοιχεία Μελέτης</h6></div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-6">
+            <dl class="row small mb-0">
+              <dt class="col-5 text-muted">Τύπος</dt>
+              <dd class="col-7">{{ dp.type_label }}</dd>
+              <dt class="col-5 text-muted">Σχεδιαστής</dt>
+              <dd class="col-7">
+                {% if dp.designer %}{{ dp.designer.full_name }}
+                {% elif dp.assigned_sub %}<i class="bi bi-person-gear me-1"></i>{{ dp.assigned_sub.company_name }}
+                {% else %}<span class="text-muted">—</span>{% endif %}
+              </dd>
+              <dt class="col-5 text-muted">Προθεσμία</dt>
+              <dd class="col-7">
+                {% if dp.deadline %}
+                <span class="{{ 'text-danger fw-bold' if dp.deadline < today and dp.status not in ('approved','final') else '' }}">
+                  {{ dp.deadline.strftime('%d/%m/%Y') }}
+                  {% if dp.deadline < today and dp.status not in ('approved','final') %}
+                  <i class="bi bi-exclamation-triangle ms-1"></i>
+                  {% endif %}
+                </span>
+                {% else %}—{% endif %}
+              </dd>
+              <dt class="col-5 text-muted">Ημ. Έγκρισης</dt>
+              <dd class="col-7">{{ dp.approved_date.strftime('%d/%m/%Y') if dp.approved_date else '—' }}</dd>
+            </dl>
+          </div>
+          <div class="col-md-6">
+            <dl class="row small mb-0">
+              <dt class="col-5 text-muted">Budget</dt>
+              <dd class="col-7">{{ '{:,.2f}'.format(dp.budget|float) }} €</dd>
+              <dt class="col-5 text-muted">Πραγματικό Κόστος</dt>
+              <dd class="col-7 {{ 'text-danger' if dp.actual_cost|float > dp.budget|float else '' }}">
+                {{ '{:,.2f}'.format(dp.actual_cost|float) }} €
+              </dd>
+              <dt class="col-5 text-muted">Εκδόσεις</dt>
+              <dd class="col-7">{{ dp.revision_count }}</dd>
+              <dt class="col-5 text-muted">Δημιουργήθηκε</dt>
+              <dd class="col-7 small">{{ dp.created_at.strftime('%d/%m/%Y') }}</dd>
+            </dl>
+          </div>
+        </div>
+
+        {% if dp.client_brief %}
+        <hr style="border-color:#333">
+        <h6 class="small text-muted mb-1">Εντολή Πελάτη</h6>
+        <p class="small mb-0">{{ dp.client_brief }}</p>
+        {% endif %}
+
+        {% if dp.description %}
+        <hr style="border-color:#333">
+        <h6 class="small text-muted mb-1">Περιγραφή</h6>
+        <p class="small mb-0">{{ dp.description }}</p>
+        {% endif %}
+
+        {% if dp.notes %}
+        <hr style="border-color:#333">
+        <h6 class="small text-muted mb-1">Σημειώσεις</h6>
+        <p class="small mb-0 text-muted">{{ dp.notes }}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Revisions -->
+    <div class="card card-dark">
+      <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-layers me-1 text-warning"></i>Εκδόσεις Μελέτης</h6>
+        <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#modalNewRevision">
+          <i class="bi bi-upload me-1"></i>Νέα Έκδοση
+        </button>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-dark table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Έκδοση</th>
+              <th>Τίτλος</th>
+              <th>Υποβλήθηκε</th>
+              <th>Αρχείο</th>
+              <th>Κατάσταση</th>
+              {% if current_user.role in ('admin','manager') %}<th></th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for rev in revisions %}
+            <tr>
+              <td>
+                <span class="badge bg-secondary">v{{ rev.version_number }}</span>
+              </td>
+              <td>
+                <strong class="small">{{ rev.title or 'Έκδοση ' + rev.version_number|string }}</strong>
+                {% if rev.description %}
+                <div class="text-muted" style="font-size:11px">{{ rev.description[:60] }}</div>
+                {% endif %}
+              </td>
+              <td class="small text-muted">
+                {{ rev.created_at.strftime('%d/%m/%Y') }}
+                {% if rev.submitted_by %}<br>{{ rev.submitted_by.username }}{% endif %}
+              </td>
+              <td>
+                {% if rev.file_path %}
+                <a href="/{{ rev.file_path }}" target="_blank" class="btn btn-outline-secondary btn-sm">
+                  <i class="bi bi-file-earmark me-1"></i>{{ rev.file_name[:20] if rev.file_name else 'Αρχείο' }}
+                </a>
+                {% else %}
+                <span class="text-muted small">—</span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge bg-{{ rev.status_color }}">{{ rev.status_label }}</span>
+                {% if rev.review_notes %}
+                <div class="text-muted" style="font-size:10px">{{ rev.review_notes[:40] }}</div>
+                {% endif %}
+              </td>
+              {% if current_user.role in ('admin','manager') %}
+              <td>
+                {% if rev.status == 'pending' %}
+                <div class="btn-group btn-group-sm">
+                  <form method="post" action="{{ url_for('design.approve_revision', rev_id=rev.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="review_notes" value="">
+                    <button type="submit" class="btn btn-outline-success btn-sm" title="Έγκριση">
+                      <i class="bi bi-check-lg"></i>
+                    </button>
+                  </form>
+                  <button type="button" class="btn btn-outline-danger btn-sm"
+                          data-bs-toggle="modal" data-bs-target="#modalReject{{ rev.id }}"
+                          title="Απόρριψη">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </div>
+                {% endif %}
+              </td>
+              {% endif %}
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="{{ 6 if current_user.role in ('admin','manager') else 5 }}" class="text-center text-muted py-4 small">
+                Δεν υπάρχουν εκδόσεις ακόμα.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: sidebar info -->
+  <div class="col-lg-4">
+    <!-- Quick status change -->
+    {% if current_user.role in ('admin','manager') %}
+    <div class="card card-dark mb-3">
+      <div class="card-header border-secondary"><h6 class="mb-0 small">Αλλαγή Κατάστασης</h6></div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('design.edit', id=dp.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="title" value="{{ dp.title }}">
+          <input type="hidden" name="design_type" value="{{ dp.design_type }}">
+          <input type="hidden" name="priority" value="{{ dp.priority }}">
+          <input type="hidden" name="description" value="{{ dp.description or '' }}">
+          <input type="hidden" name="client_brief" value="{{ dp.client_brief or '' }}">
+          <input type="hidden" name="notes" value="{{ dp.notes or '' }}">
+          <input type="hidden" name="project_id" value="{{ dp.project_id or '' }}">
+          <input type="hidden" name="designer_id" value="{{ dp.designer_id or '' }}">
+          <input type="hidden" name="assigned_sub_id" value="{{ dp.assigned_sub_id or '' }}">
+          <input type="hidden" name="deadline" value="{{ dp.deadline.strftime('%Y-%m-%d') if dp.deadline else '' }}">
+          <input type="hidden" name="budget" value="{{ dp.budget or '' }}">
+          <input type="hidden" name="actual_cost" value="{{ dp.actual_cost or '' }}">
+          <div class="mb-2">
+            <select name="status" class="form-select form-select-sm bg-dark text-white border-secondary">
+              {% for val, lbl in statuses %}
+              <option value="{{ val }}" {{ 'selected' if dp.status == val }}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-sm btn-outline-warning w-100">
+            <i class="bi bi-arrow-repeat me-1"></i>Ενημέρωση
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Timeline / Activity -->
+    <div class="card card-dark mb-3">
+      <div class="card-header border-secondary"><h6 class="mb-0 small">Χρονολόγιο</h6></div>
+      <div class="card-body small">
+        <div class="d-flex justify-content-between py-1 border-bottom border-secondary">
+          <span class="text-muted">Δημιουργία</span>
+          <span>{{ dp.created_at.strftime('%d/%m/%Y') }}</span>
+        </div>
+        {% if dp.deadline %}
+        <div class="d-flex justify-content-between py-1 border-bottom border-secondary">
+          <span class="text-muted">Προθεσμία</span>
+          <span class="{{ 'text-danger' if dp.deadline < today and dp.status not in ('approved','final') else '' }}">
+            {{ dp.deadline.strftime('%d/%m/%Y') }}
+          </span>
+        </div>
+        {% endif %}
+        {% if dp.approved_date %}
+        <div class="d-flex justify-content-between py-1">
+          <span class="text-muted">Έγκριση</span>
+          <span class="text-success">{{ dp.approved_date.strftime('%d/%m/%Y') }}</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Cost summary -->
+    {% if dp.budget %}
+    <div class="card card-dark">
+      <div class="card-header border-secondary"><h6 class="mb-0 small">Κόστος Μελέτης</h6></div>
+      <div class="card-body small">
+        {% set pct = ((dp.actual_cost|float / dp.budget|float) * 100)|int if dp.budget|float > 0 else 0 %}
+        <div class="d-flex justify-content-between mb-1">
+          <span class="text-muted">Budget</span>
+          <span>{{ '{:,.2f}'.format(dp.budget|float) }} €</span>
+        </div>
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">Πραγματικό</span>
+          <span class="{{ 'text-danger fw-bold' if dp.actual_cost|float > dp.budget|float else 'text-success' }}">
+            {{ '{:,.2f}'.format(dp.actual_cost|float) }} €
+          </span>
+        </div>
+        <div class="progress" style="height:8px;background:#333">
+          <div class="progress-bar bg-{{ 'danger' if pct > 100 else 'warning' if pct > 80 else 'success' }}"
+               style="width:{{ [pct,100]|min }}%"></div>
+        </div>
+        <div class="text-muted mt-1 text-end">{{ pct }}% χρησιμοποιήθηκε</div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+
+<!-- Modal: New Revision -->
+<div class="modal fade" id="modalNewRevision" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content" style="background:#1a1a1a;border:1px solid #333;color:#fff">
+      <div class="modal-header" style="border-color:#333">
+        <h5 class="modal-title brand-gold"><i class="bi bi-upload me-2"></i>Νέα Έκδοση</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('design.new_revision', id=dp.id) }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Τίτλος Έκδοσης</label>
+            <input type="text" name="title" class="form-control bg-dark text-white border-secondary"
+                   placeholder="π.χ. Αρχική Πρόταση, Μετά Παρατηρήσεις Πελάτη">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Τι Άλλαξε / Σχόλια</label>
+            <textarea name="description" class="form-control bg-dark text-white border-secondary" rows="3"
+                      placeholder="Περιγράψτε τις αλλαγές που έγιναν..."></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Αρχείο Σχεδίου (DWG, PDF, JPG, κτλ.)</label>
+            <input type="file" name="revision_file" class="form-control bg-dark text-white border-secondary"
+                   accept=".pdf,.dwg,.dxf,.jpg,.jpeg,.png,.zip,.rar">
+          </div>
+        </div>
+        <div class="modal-footer" style="border-color:#333">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-gold">Υποβολή Έκδοσης</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modals: Reject Revision (one per pending revision) -->
+{% for rev in revisions %}
+{% if rev.status == 'pending' and current_user.role in ('admin','manager') %}
+<div class="modal fade" id="modalReject{{ rev.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content" style="background:#1a1a1a;border:1px solid #333;color:#fff">
+      <div class="modal-header" style="border-color:#333">
+        <h5 class="modal-title text-danger"><i class="bi bi-x-circle me-2"></i>Απόρριψη Έκδοσης v{{ rev.version_number }}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('design.reject_revision', rev_id=rev.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <label class="form-label">Παρατηρήσεις / Αιτία Απόρριψης *</label>
+          <textarea name="review_notes" class="form-control bg-dark text-white border-secondary" rows="3" required
+                    placeholder="Περιγράψτε τι πρέπει να αλλάξει..."></textarea>
+        </div>
+        <div class="modal-footer" style="border-color:#333">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-danger">Απόρριψη</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+
+<!-- Modal: Edit -->
+<div class="modal fade" id="modalEdit" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content" style="background:#1a1a1a;border:1px solid #333;color:#fff">
+      <div class="modal-header" style="border-color:#333">
+        <h5 class="modal-title brand-gold"><i class="bi bi-pencil me-2"></i>Επεξεργασία Μελέτης</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('design.edit', id=dp.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Τίτλος *</label>
+              <input type="text" name="title" class="form-control bg-dark text-white border-secondary"
+                     value="{{ dp.title }}" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Τύπος</label>
+              <select name="design_type" class="form-select bg-dark text-white border-secondary">
+                {% for val, lbl in design_types %}
+                <option value="{{ val }}" {{ 'selected' if dp.design_type == val }}>{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Κατάσταση</label>
+              <select name="status" class="form-select bg-dark text-white border-secondary">
+                {% for val, lbl in statuses %}
+                <option value="{{ val }}" {{ 'selected' if dp.status == val }}>{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Προτεραιότητα</label>
+              <select name="priority" class="form-select bg-dark text-white border-secondary">
+                {% for val, lbl in priorities %}
+                <option value="{{ val }}" {{ 'selected' if dp.priority == val }}>{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Έργο</label>
+              <select name="project_id" class="form-select bg-dark text-white border-secondary">
+                <option value="">—</option>
+                {% for p in projects %}
+                <option value="{{ p.id }}" {{ 'selected' if dp.project_id == p.id }}>[{{ p.code }}] {{ p.title[:30] }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Σχεδιαστής (εσωτερικός)</label>
+              <select name="designer_id" class="form-select bg-dark text-white border-secondary">
+                <option value="">—</option>
+                {% for emp in employees %}
+                <option value="{{ emp.id }}" {{ 'selected' if dp.designer_id == emp.id }}>{{ emp.full_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Εξωτερικός (Υπεργολάβος)</label>
+              <select name="assigned_sub_id" class="form-select bg-dark text-white border-secondary">
+                <option value="">—</option>
+                {% for s in subs %}
+                <option value="{{ s.id }}" {{ 'selected' if dp.assigned_sub_id == s.id }}>{{ s.company_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Προθεσμία</label>
+              <input type="date" name="deadline" class="form-control bg-dark text-white border-secondary"
+                     value="{{ dp.deadline.strftime('%Y-%m-%d') if dp.deadline else '' }}">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Budget (€)</label>
+              <input type="number" step="0.01" name="budget" class="form-control bg-dark text-white border-secondary"
+                     value="{{ dp.budget or '' }}">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Πραγματικό Κόστος (€)</label>
+              <input type="number" step="0.01" name="actual_cost" class="form-control bg-dark text-white border-secondary"
+                     value="{{ dp.actual_cost or '' }}">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Εντολή Πελάτη</label>
+              <textarea name="client_brief" class="form-control bg-dark text-white border-secondary" rows="2">{{ dp.client_brief or '' }}</textarea>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Περιγραφή</label>
+              <textarea name="description" class="form-control bg-dark text-white border-secondary" rows="3">{{ dp.description or '' }}</textarea>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Σημειώσεις</label>
+              <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="2">{{ dp.notes or '' }}</textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="border-color:#333">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-gold">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

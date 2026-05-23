@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Νέα Μελέτη — ART ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('design.index') }}">Σχεδιασμός</a></li>
+<li class="breadcrumb-item active">Νέα Μελέτη</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h2 class="page-title mb-0"><i class="bi bi-plus-circle me-2 text-warning"></i>Νέα Μελέτη / Σχεδιασμός</h2>
+  <a href="{{ url_for('design.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Πίσω
+  </a>
+</div>
+
+<div class="card card-dark">
+  <div class="card-body">
+    <form method="post" action="{{ url_for('design.new') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="row g-4">
+        <!-- Left column -->
+        <div class="col-lg-8">
+          <div class="mb-3">
+            <label class="form-label">Τίτλος Μελέτης *</label>
+            <input type="text" name="title" class="form-control bg-dark text-white border-secondary"
+                   placeholder="π.χ. Αρχιτεκτονικά Σχέδια Ισογείου — Έργο Κολωνάκι" required autofocus>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-4">
+              <label class="form-label">Τύπος Μελέτης *</label>
+              <select name="design_type" class="form-select bg-dark text-white border-secondary">
+                {% for val, lbl in design_types %}
+                <option value="{{ val }}">{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Κατάσταση</label>
+              <select name="status" class="form-select bg-dark text-white border-secondary">
+                {% for val, lbl in statuses %}
+                <option value="{{ val }}" {{ 'selected' if val == 'draft' }}>{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Προτεραιότητα</label>
+              <select name="priority" class="form-select bg-dark text-white border-secondary">
+                {% for val, lbl in priorities %}
+                <option value="{{ val }}" {{ 'selected' if val == 'normal' }}>{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Συνδεδεμένο Έργο</label>
+            <select name="project_id" class="form-select bg-dark text-white border-secondary">
+              <option value="">— Χωρίς σύνδεση έργου —</option>
+              {% for p in projects %}
+              <option value="{{ p.id }}">[{{ p.code }}] {{ p.title[:50] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Εντολή Πελάτη / Brief</label>
+            <textarea name="client_brief" class="form-control bg-dark text-white border-secondary" rows="3"
+                      placeholder="Τι ζήτησε ο πελάτης..."></textarea>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Περιγραφή / Αντικείμενο</label>
+            <textarea name="description" class="form-control bg-dark text-white border-secondary" rows="4"
+                      placeholder="Λεπτομερής περιγραφή της μελέτης..."></textarea>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Σημειώσεις</label>
+            <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="2"></textarea>
+          </div>
+        </div>
+
+        <!-- Right column -->
+        <div class="col-lg-4">
+          <div class="card" style="background:#222;border:1px solid #333">
+            <div class="card-header border-secondary"><h6 class="mb-0 small">Ανάθεση & Χρονοδιάγραμμα</h6></div>
+            <div class="card-body">
+              <div class="mb-3">
+                <label class="form-label small">Εσωτερικός Σχεδιαστής</label>
+                <select name="designer_id" class="form-select form-select-sm bg-dark text-white border-secondary">
+                  <option value="">— Επιλογή —</option>
+                  {% for emp in employees %}
+                  <option value="{{ emp.id }}">{{ emp.full_name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label small">ή Εξωτερικός (Υπεργολάβος)</label>
+                <select name="assigned_sub_id" class="form-select form-select-sm bg-dark text-white border-secondary">
+                  <option value="">— Επιλογή —</option>
+                  {% for s in subs %}
+                  <option value="{{ s.id }}">{{ s.company_name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <hr style="border-color:#333">
+
+              <div class="mb-3">
+                <label class="form-label small">Προθεσμία</label>
+                <input type="date" name="deadline" class="form-control form-control-sm bg-dark text-white border-secondary"
+                       value="{{ today }}">
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label small">Budget Μελέτης (€)</label>
+                <input type="number" step="0.01" name="budget" class="form-control form-control-sm bg-dark text-white border-secondary"
+                       placeholder="0.00">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-gold">
+          <i class="bi bi-plus-lg me-1"></i>Δημιουργία Μελέτης
+        </button>
+        <a href="{{ url_for('design.index') }}" class="btn btn-outline-secondary">Άκυρο</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

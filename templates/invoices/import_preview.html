@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Προεπισκόπηση Εισαγωγής — ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('invoices.index') }}">Τιμολόγια</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('invoices.import_list') }}">Εισαγωγή Λίστας</a></li>
+<li class="breadcrumb-item active">Προεπισκόπηση</li>
+{% endblock %}
+
+{% block content %}
+{% set found_rows   = parsed | selectattr('status', 'equalto', 'found')   | list %}
+{% set missing_rows = parsed | selectattr('status', 'equalto', 'missing') | list %}
+
+<div class="page-header d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h1 class="page-title"><i class="bi bi-table me-2 text-gold"></i>Έλεγχος Λίστας Λογιστή</h1>
+    <p class="page-subtitle text-muted">{{ parsed | length }} εγγραφές από τον λογιστή</p>
+  </div>
+  <a href="{{ url_for('invoices.import_list') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Νέο Αρχείο
+  </a>
+</div>
+
+<!-- Summary KPIs -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="kpi-card">
+      <div class="kpi-icon" style="background:#dcfce7"><i class="bi bi-check-circle-fill text-success"></i></div>
+      <div>
+        <div class="kpi-value text-success">{{ found_rows | length }}</div>
+        <div class="kpi-label">Βρέθηκαν στο σύστημα</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="kpi-card border-danger">
+      <div class="kpi-icon" style="background:#fee2e2"><i class="bi bi-exclamation-triangle-fill text-danger"></i></div>
+      <div>
+        <div class="kpi-value text-danger">{{ missing_rows | length }}</div>
+        <div class="kpi-label">Λείπουν — χρειάζονται ανέβασμα</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="kpi-card">
+      <div class="kpi-icon" style="background:#fef3c7"><i class="bi bi-currency-euro text-warning"></i></div>
+      <div>
+        <div class="kpi-value" style="font-size:18px">
+          {{ '%.2f' | format(missing_rows | sum(attribute='total_amount')) }}€
+        </div>
+        <div class="kpi-label">Αξία που λείπει</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if missing_rows %}
+<!-- Missing invoices alert -->
+<div class="alert alert-danger d-flex align-items-start gap-3 mb-4">
+  <i class="bi bi-exclamation-triangle-fill fs-4 flex-shrink-0 mt-1"></i>
+  <div>
+    <strong>{{ missing_rows | length }} τιμολόγια δεν έχουν ανεβεί στο σύστημα.</strong>
+    Βρείτε τα φυσικά ή ψηφιακά τιμολόγια και ανεβάστε τα μέσω <a href="{{ url_for('invoices.upload') }}" class="alert-link">Νέο Τιμολόγιο</a>.
+    Μπορείτε επίσης να τα εισάγετε τώρα χωρίς αρχείο (μόνο στοιχεία) επιλέγοντας τα παρακάτω.
+  </div>
+</div>
+{% endif %}
+
+{% if found_rows %}
+<div class="alert alert-success d-flex align-items-start gap-3 mb-4">
+  <i class="bi bi-check-circle-fill fs-4 flex-shrink-0 mt-1"></i>
+  <div>
+    <strong>{{ found_rows | length }} τιμολόγια βρέθηκαν ήδη στο σύστημα</strong> — δεν χρειάζεται να τα εισάγετε ξανά.
+  </div>
+</div>
+{% endif %}
+
+<!-- Import form -->
+<form method="POST" action="{{ url_for('invoices.import_confirm') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="rows_json" value="{{ rows_json | e }}">
+
+  <!-- Options bar -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-body d-flex flex-wrap gap-3 align-items-center py-2">
+      <div>
+        <label class="form-label mb-0 me-2 small fw-semibold">Έργο για εισαγωγή:</label>
+        <select name="project_id" class="form-select form-select-sm d-inline-block" style="width:auto">
+          <option value="">— Κανένα —</option>
+          {% for p in projects %}
+          <option value="{{ p.id }}">{{ p.code }} — {{ p.title[:35] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ms-auto d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="selectMissing()">
+          <i class="bi bi-exclamation-triangle me-1"></i>Μόνο Ελλείποντα
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAll(true)">
+          <i class="bi bi-check2-all me-1"></i>Όλα
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAll(false)">
+          <i class="bi bi-x me-1"></i>Κανένα
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th style="width:40px"><input type="checkbox" id="checkAll" class="form-check-input"></th>
+              <th>Κατάσταση</th>
+              <th>Εκδότης</th>
+              <th>Αρ. Τιμολ.</th>
+              <th>Ημερομηνία</th>
+              <th class="text-end">Καθαρό</th>
+              <th class="text-center">ΦΠΑ%</th>
+              <th class="text-end">Σύνολο</th>
+              <th>Κατηγορία</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in parsed %}
+            {% set is_missing = row.status == 'missing' %}
+            <tr class="{% if is_missing %}table-warning{% endif %}">
+              <td>
+                <input type="checkbox" name="selected_rows" value="{{ loop.index0 }}"
+                       class="form-check-input row-check"
+                       data-status="{{ row.status }}"
+                       {% if is_missing %}checked{% endif %}>
+              </td>
+              <td>
+                {% if is_missing %}
+                  <span class="badge bg-danger">
+                    <i class="bi bi-exclamation-triangle me-1"></i>Λείπει
+                  </span>
+                {% else %}
+                  <a href="{{ url_for('invoices.index') }}?q={{ row.invoice_number or row.issuer }}"
+                     class="badge bg-success text-decoration-none" target="_blank">
+                    <i class="bi bi-check-circle me-1"></i>Υπάρχει
+                  </a>
+                {% endif %}
+              </td>
+              <td>
+                <div class="fw-semibold">{{ row.issuer }}</div>
+                {% if row.issuer_afm %}<div class="text-muted small">ΑΦΜ: {{ row.issuer_afm }}</div>{% endif %}
+              </td>
+              <td class="small {% if not row.invoice_number %}text-warning{% endif %}">
+                {{ row.invoice_number or '—' }}
+              </td>
+              <td class="small {% if not row.invoice_date %}text-warning{% endif %}">
+                {% if row.invoice_date %}
+                  {{ row.invoice_date | replace('-', '/') }}
+                {% else %}
+                  <i class="bi bi-question-circle text-warning" title="Δεν βρέθηκε ημερομηνία"></i> —
+                {% endif %}
+              </td>
+              <td class="text-end fw-semibold">{{ '%.2f' | format(row.amount_net) }}€</td>
+              <td class="text-center">
+                <span class="badge bg-secondary">{{ row.vat_rate | int }}%</span>
+              </td>
+              <td class="text-end fw-bold {% if is_missing %}text-danger{% else %}text-success{% endif %}">
+                {{ '%.2f' | format(row.total_amount) }}€
+              </td>
+              <td><span class="badge bg-light text-dark border">{{ row.category or '—' }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot class="table-light fw-semibold">
+            <tr>
+              <td colspan="7" class="text-end">Σύνολο επιλεγμένων:</td>
+              <td class="text-end text-primary" id="sumTotal">—</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center">
+    <div class="text-muted small">
+      <span id="selectedCount">0</span> εγγραφές επιλεγμένες για εισαγωγή
+      <span class="text-muted ms-2">(τα "Λείπει" θα μπουν χωρίς αρχείο — ανεβάστε το τιμολόγιο αργότερα)</span>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('invoices.import_list') }}" class="btn btn-outline-secondary">Ακύρωση</a>
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-cloud-upload me-1"></i>Εισαγωγή Επιλεγμένων
+      </button>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const rows    = {{ rows_json | safe }};
+const checks  = document.querySelectorAll('.row-check');
+const checkAll = document.getElementById('checkAll');
+const sumTotalEl = document.getElementById('sumTotal');
+const countEl    = document.getElementById('selectedCount');
+
+function updateTotals() {
+  let total = 0, count = 0;
+  checks.forEach((cb, i) => {
+    if (cb.checked) { total += rows[i].total_amount || 0; count++; }
+  });
+  sumTotalEl.textContent = total.toLocaleString('el-GR', {minimumFractionDigits:2, maximumFractionDigits:2}) + '€';
+  countEl.textContent = count;
+  const checked = [...checks].filter(cb => cb.checked).length;
+  checkAll.indeterminate = checked > 0 && checked < checks.length;
+  checkAll.checked = checked === checks.length;
+}
+
+function toggleAll(on) {
+  checks.forEach(cb => cb.checked = on);
+  updateTotals();
+}
+
+function selectMissing() {
+  checks.forEach(cb => { cb.checked = cb.dataset.status === 'missing'; });
+  updateTotals();
+}
+
+checkAll.addEventListener('change', () => toggleAll(checkAll.checked));
+checks.forEach(cb => cb.addEventListener('change', updateTotals));
+
+// Default: only missing checked
+selectMissing();
+</script>
+{% endblock %}

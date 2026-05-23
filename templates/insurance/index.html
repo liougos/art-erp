@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+{% block title %}Ασφαλιστήρια — ERP{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Ασφαλιστήρια</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-shield-fill-check me-2 text-primary"></i>Ασφαλιστήρια Συμβόλαια</h1>
+    <p class="page-subtitle">Παρακολούθηση ασφαλιστικής κάλυψης</p>
+  </div>
+  <button class="btn btn-gold" data-bs-toggle="modal" data-bs-target="#newPolicyModal">
+    <i class="bi bi-plus-lg me-1"></i>Νέο Ασφαλιστήριο
+  </button>
+</div>
+
+<!-- Alerts -->
+{% if expired %}
+<div class="alert alert-danger d-flex align-items-center gap-2 mb-3">
+  <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+  <span><strong>{{ expired|length }} ληγμένα</strong> ασφαλιστήρια χρειάζονται ανανέωση.</span>
+</div>
+{% endif %}
+{% if expiring_soon %}
+<div class="alert alert-warning d-flex align-items-center gap-2 mb-3">
+  <i class="bi bi-clock-fill fs-5"></i>
+  <span><strong>{{ expiring_soon|length }} ασφαλιστήρια</strong> λήγουν εντός 30 ημερών.</span>
+</div>
+{% endif %}
+
+<!-- KPIs -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon blue"><i class="bi bi-shield-check"></i></div>
+      <div><div class="kpi-value">{{ policies|selectattr('status','eq','active')|list|length }}</div><div class="kpi-label">Ενεργά</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon orange"><i class="bi bi-clock-history"></i></div>
+      <div><div class="kpi-value">{{ expiring_soon|length }}</div><div class="kpi-label">Λήγουν σύντομα</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon red"><i class="bi bi-shield-x"></i></div>
+      <div><div class="kpi-value">{{ expired|length }}</div><div class="kpi-label">Ληγμένα</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon green"><i class="bi bi-currency-euro"></i></div>
+      <div>
+        {% set total_prem = policies|selectattr('annual_premium')|map(attribute='annual_premium')|map('float')|sum %}
+        <div class="kpi-value" style="font-size:18px">{{ '{:,.0f}'.format(total_prem) }}€</div>
+        <div class="kpi-label">Ετήσια Ασφάλιστρα</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Policies Table -->
+<div class="card">
+  <div class="card-header"><i class="bi bi-list-ul"></i> Όλα τα Ασφαλιστήρια</div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Τίτλος / Είδος</th>
+          <th>Ασφαλιστική</th>
+          <th>Αρ. Συμβολαίου</th>
+          <th>Αντικείμενο</th>
+          <th>Έναρξη</th>
+          <th>Λήξη</th>
+          <th>Ασφάλιστρο/έτος</th>
+          <th>Κατάσταση</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in policies %}
+        {% set is_expired = p.days_to_expiry is not none and p.days_to_expiry < 0 %}
+        {% set is_soon = p.days_to_expiry is not none and 0 <= p.days_to_expiry <= 30 %}
+        <tr class="{% if is_expired %}table-danger{% elif is_soon %}table-warning{% endif %}">
+          <td>
+            <div class="fw-semibold">{{ p.title }}</div>
+            <small class="text-muted">{{ p.type_label }}</small>
+          </td>
+          <td>{{ p.insurance_company or '—' }}</td>
+          <td><code style="font-size:12px">{{ p.policy_number or '—' }}</code></td>
+          <td class="text-truncate" style="max-width:120px">{{ p.insured_object or '—' }}</td>
+          <td><small>{{ p.start_date.strftime('%d/%m/%Y') if p.start_date else '—' }}</small></td>
+          <td>
+            <small class="{% if is_expired %}text-danger fw-bold{% elif is_soon %}text-warning fw-bold{% endif %}">
+              {{ p.expiry_date.strftime('%d/%m/%Y') if p.expiry_date else '—' }}
+            </small>
+            {% if p.days_to_expiry is not none %}
+            <br><small class="text-muted" style="font-size:10px">
+              {% if is_expired %}Έληξε {{ -p.days_to_expiry }} ημ. πριν
+              {% elif is_soon %}{{ p.days_to_expiry }} ημ. απομένουν
+              {% else %}{{ p.days_to_expiry }} ημ.{% endif %}
+            </small>
+            {% endif %}
+          </td>
+          <td>{% if p.annual_premium %}{{ '{:,.2f}'.format(p.annual_premium|float) }}€{% else %}—{% endif %}</td>
+          <td>
+            <span class="badge {{ p.status_color }}">{{ p.status_label }}</span>
+            {% if p.auto_renew %}<br><span class="badge bg-secondary" style="font-size:9px">Αυτ. Ανανέωση</span>{% endif %}
+          </td>
+          <td>
+            <div class="d-flex gap-1">
+              {% if p.file_path %}
+              <a href="{{ url_for('insurance.view_file', id=p.id) }}" target="_blank"
+                 class="btn btn-sm btn-outline-secondary" title="Αρχείο">
+                <i class="bi bi-file-earmark-pdf"></i>
+              </a>
+              {% endif %}
+              <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal"
+                      data-bs-target="#editModal{{ p.id }}" title="Επεξεργασία">
+                <i class="bi bi-pencil"></i>
+              </button>
+              {% if current_user.role in ('admin', 'manager') %}
+              <form method="POST" action="{{ url_for('insurance.delete', id=p.id) }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger"
+                        onclick="return confirm('Διαγραφή ασφαλιστηρίου;')" title="Διαγραφή">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+
+        <!-- Edit Modal -->
+        <div class="modal fade" id="editModal{{ p.id }}" tabindex="-1">
+          <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Επεξεργασία: {{ p.title }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+              </div>
+              <form method="POST" action="{{ url_for('insurance.edit', id=p.id) }}">
+                <div class="modal-body">
+                  <div class="row g-3">
+                    <div class="col-8">
+                      <label class="form-label">Τίτλος *</label>
+                      <input type="text" name="title" class="form-control" value="{{ p.title }}" required>
+                    </div>
+                    <div class="col-4">
+                      <label class="form-label">Είδος</label>
+                      <select name="policy_type" class="form-select">
+                        {% for val, lbl in policy_types %}
+                        <option value="{{ val }}" {% if p.policy_type==val %}selected{% endif %}>{{ lbl }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label">Ασφαλιστική Εταιρεία</label>
+                      <input type="text" name="insurance_company" class="form-control" value="{{ p.insurance_company or '' }}">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label">Αρ. Συμβολαίου</label>
+                      <input type="text" name="policy_number" class="form-control" value="{{ p.policy_number or '' }}">
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label">Αντικείμενο Ασφάλισης</label>
+                      <input type="text" name="insured_object" class="form-control" value="{{ p.insured_object or '' }}">
+                    </div>
+                    <div class="col-4">
+                      <label class="form-label">Έναρξη</label>
+                      <input type="date" name="start_date" class="form-control"
+                             value="{{ p.start_date.strftime('%Y-%m-%d') if p.start_date else '' }}">
+                    </div>
+                    <div class="col-4">
+                      <label class="form-label">Λήξη</label>
+                      <input type="date" name="expiry_date" class="form-control"
+                             value="{{ p.expiry_date.strftime('%Y-%m-%d') if p.expiry_date else '' }}">
+                    </div>
+                    <div class="col-4">
+                      <label class="form-label">Κατάσταση</label>
+                      <select name="status" class="form-select">
+                        <option value="active" {% if p.status=='active' %}selected{% endif %}>Ενεργό</option>
+                        <option value="expired" {% if p.status=='expired' %}selected{% endif %}>Ληγμένο</option>
+                        <option value="cancelled" {% if p.status=='cancelled' %}selected{% endif %}>Ακυρωμένο</option>
+                      </select>
+                    </div>
+                    <div class="col-4">
+                      <label class="form-label">Ασφαλιστικό Κεφάλαιο (€)</label>
+                      <input type="number" name="coverage_amount" class="form-control" step="0.01"
+                             value="{{ p.coverage_amount or '' }}">
+                    </div>
+                    <div class="col-4">
+                      <label class="form-label">Ετήσιο Ασφάλιστρο (€)</label>
+                      <input type="number" name="annual_premium" class="form-control" step="0.01"
+                             value="{{ p.annual_premium or '' }}">
+                    </div>
+                    <div class="col-4">
+                      <label class="form-label">Αυτόματη Ανανέωση</label>
+                      <select name="auto_renew" class="form-select">
+                        <option value="1" {% if p.auto_renew %}selected{% endif %}>Ναι</option>
+                        <option value="0" {% if not p.auto_renew %}selected{% endif %}>Όχι</option>
+                      </select>
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label">Σημειώσεις</label>
+                      <textarea name="notes" class="form-control" rows="2">{{ p.notes or '' }}</textarea>
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Ακύρωση</button>
+                  <button type="submit" class="btn btn-primary btn-sm">Αποθήκευση</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <tr><td colspan="9" class="text-center text-muted py-4">Δεν υπάρχουν ασφαλιστήρια ακόμα</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- New Policy Modal -->
+<div class="modal fade" id="newPolicyModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Νέο Ασφαλιστήριο Συμβόλαιο</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('insurance.new') }}" enctype="multipart/form-data">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-8">
+              <label class="form-label">Τίτλος *</label>
+              <input type="text" name="title" class="form-control" placeholder="π.χ. Αστική Ευθύνη Εργοταξίου 2026" required>
+            </div>
+            <div class="col-4">
+              <label class="form-label">Είδος</label>
+              <select name="policy_type" class="form-select">
+                {% for val, lbl in policy_types %}
+                <option value="{{ val }}">{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Ασφαλιστική Εταιρεία</label>
+              <input type="text" name="insurance_company" class="form-control">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Αρ. Συμβολαίου</label>
+              <input type="text" name="policy_number" class="form-control">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Αντικείμενο Ασφάλισης</label>
+              <input type="text" name="insured_object" class="form-control"
+                     placeholder="π.χ. Εργοτάξιο, Όχημα ΑΒΓ-1234, Εξοπλισμός...">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Όχημα (αν αφορά)</label>
+              <select name="vehicle_id" class="form-select">
+                <option value="">— Χωρίς όχημα —</option>
+                {% for v in vehicles %}
+                <option value="{{ v.id }}">{{ v.plate }} — {{ v.brand }} {{ v.model }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Συχνότητα Πληρωμής</label>
+              <select name="payment_frequency" class="form-select">
+                <option value="annual">Ετήσια</option>
+                <option value="semi-annual">Εξαμηνιαία</option>
+                <option value="quarterly">Τριμηνιαία</option>
+                <option value="monthly">Μηνιαία</option>
+              </select>
+            </div>
+            <div class="col-4">
+              <label class="form-label">Έναρξη</label>
+              <input type="date" name="start_date" class="form-control">
+            </div>
+            <div class="col-4">
+              <label class="form-label">Λήξη</label>
+              <input type="date" name="expiry_date" class="form-control">
+            </div>
+            <div class="col-4">
+              <label class="form-label">Αυτόματη Ανανέωση</label>
+              <select name="auto_renew" class="form-select">
+                <option value="0">Όχι</option>
+                <option value="1">Ναι</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Ασφαλιστικό Κεφάλαιο (€)</label>
+              <input type="number" name="coverage_amount" class="form-control" step="0.01">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Ετήσιο Ασφάλιστρο (€)</label>
+              <input type="number" name="annual_premium" class="form-control" step="0.01">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Αρχείο Ασφαλιστηρίου (PDF/εικόνα)</label>
+              <input type="file" name="policy_file" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Σημειώσεις</label>
+              <textarea name="notes" class="form-control" rows="2"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Ακύρωση</button>
+          <button type="submit" class="btn btn-gold btn-sm">Προσθήκη</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

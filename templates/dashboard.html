@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — ART RESTORATION ERP{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Dashboard</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-subtitle">Καλώς ήρθατε, {{ current_user.full_name }} — {{ today.strftime('%A, %d %B %Y') }}</p>
+  </div>
+  <a href="{{ url_for('projects.new') }}" class="btn btn-gold">
+    <i class="bi bi-plus-lg me-1"></i>Νέο Έργο
+  </a>
+</div>
+
+<!-- ── KPI Row ───────────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-2">
+    <a href="{{ url_for('projects.index', status='active') }}" class="text-decoration-none">
+      <div class="kpi-card">
+        <div class="kpi-icon blue"><i class="bi bi-building"></i></div>
+        <div>
+          <div class="kpi-value">{{ active_projects }}</div>
+          <div class="kpi-label">Ενεργά Έργα</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-lg-2">
+    <a href="{{ url_for('tenders.index') }}" class="text-decoration-none">
+      <div class="kpi-card">
+        <div class="kpi-icon gold"><i class="bi bi-file-earmark-ruled"></i></div>
+        <div>
+          <div class="kpi-value">{{ active_tenders }}</div>
+          <div class="kpi-label">Ανοικτοί Διαγωνισμοί</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-lg-2">
+    <a href="{{ url_for('invoices.index', status='pending') }}" class="text-decoration-none">
+      <div class="kpi-card">
+        <div class="kpi-icon orange"><i class="bi bi-receipt-cutoff"></i></div>
+        <div>
+          <div class="kpi-value">{{ pending_invoices }}</div>
+          <div class="kpi-label">Εκκρεμή Τιμολόγια</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-lg-2">
+    <a href="{{ url_for('invoices.index', status='overdue') }}" class="text-decoration-none">
+      <div class="kpi-card">
+        <div class="kpi-icon red"><i class="bi bi-exclamation-triangle"></i></div>
+        <div>
+          <div class="kpi-value">{{ overdue_invoices }}</div>
+          <div class="kpi-label">Ληξιπρόθεσμα</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-lg-2">
+    <a href="{{ url_for('hr.index') }}" class="text-decoration-none">
+      <div class="kpi-card">
+        <div class="kpi-icon green"><i class="bi bi-people"></i></div>
+        <div>
+          <div class="kpi-value">{{ active_employees }}</div>
+          <div class="kpi-label">Ενεργό Προσωπικό</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-lg-2">
+    {% set monthly_income = monthly_data[-1].income if monthly_data else 0 %}
+    <div class="kpi-card">
+      <div class="kpi-icon purple"><i class="bi bi-graph-up-arrow"></i></div>
+      <div>
+        <div class="kpi-value" style="font-size:18px">{{ '{:,.0f}'.format(monthly_income) }}€</div>
+        <div class="kpi-label">Έσοδα Τρέχοντος Μήνα</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Charts Row ────────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-8">
+    <div class="card h-100">
+      <div class="card-header">
+        <i class="bi bi-graph-up text-primary"></i> Έσοδα vs Έξοδα (12 μήνες)
+      </div>
+      <div class="card-body">
+        <div class="chart-container" style="height:240px">
+          <canvas id="lineChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header">
+        <i class="bi bi-pie-chart text-primary"></i> Έργα ανά Κατάσταση
+      </div>
+      <div class="card-body">
+        <div class="chart-container" style="height:240px">
+          <canvas id="projectsChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Alerts Row ────────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <!-- Urgent tenders -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header justify-content-between">
+        <span><i class="bi bi-alarm text-danger"></i> Επείγουσες Προθεσμίες Διαγωνισμών</span>
+        <a href="{{ url_for('tenders.index') }}" class="btn btn-sm btn-outline-secondary">Όλοι</a>
+      </div>
+      <div class="card-body py-3">
+        {% for t in urgent_tenders %}
+        {% set days = t.days_to_deadline %}
+        <div class="alert-item {% if days is not none and days <= 7 %}urgent{% elif days is not none and days <= 14 %}warning{% else %}info{% endif %}">
+          <div class="alert-days {% if days is not none and days <= 7 %}days-urgent{% elif days is not none and days <= 14 %}days-warning{% else %}days-ok{% endif %}">
+            {{ days if days is not none else '—' }}
+          </div>
+          <div style="flex:1; min-width:0">
+            <div class="fw-semibold text-truncate" style="font-size:13px">
+              <a href="{{ url_for('tenders.detail', id=t.id) }}" class="text-decoration-none text-dark">{{ t.title[:70] }}</a>
+            </div>
+            <div class="text-muted" style="font-size:12px">
+              {{ t.procuring_authority[:50] if t.procuring_authority else '—' }}
+              {% if t.submission_deadline %}· {{ t.submission_deadline.strftime('%d/%m/%Y') }}{% endif %}
+            </div>
+          </div>
+          <span class="badge status-{{ t.status }}">{{ t.status_label }}</span>
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-3 mb-0">Δεν υπάρχουν επείγοντες διαγωνισμοί.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Expiring docs + vehicle alerts -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-shield-exclamation text-warning"></i> Λήξεις & Ειδοποιήσεις
+      </div>
+      <div class="card-body py-3">
+        {% for d in expiring_documents %}
+        <div class="alert-item warning">
+          <div class="alert-days days-warning">{{ d.days_to_expiry }}</div>
+          <div style="flex:1; min-width:0">
+            <div class="fw-semibold text-truncate" style="font-size:13px">{{ d.title[:60] }}</div>
+            <div class="text-muted" style="font-size:12px">Νομικό — λήγει {{ d.expiry_date.strftime('%d/%m/%Y') }}</div>
+          </div>
+          <i class="bi bi-file-earmark-lock text-warning fs-5"></i>
+        </div>
+        {% endfor %}
+
+        {% for a in kteo_alerts %}
+        <div class="alert-item {% if a.kteo_days_remaining <= 7 %}urgent{% else %}warning{% endif %}">
+          <div class="alert-days {% if a.kteo_days_remaining <= 7 %}days-urgent{% else %}days-warning{% endif %}">
+            {{ a.kteo_days_remaining }}
+          </div>
+          <div style="flex:1; min-width:0">
+            <div class="fw-semibold" style="font-size:13px">{{ a.plate }} — ΚΤΕΟ</div>
+            <div class="text-muted" style="font-size:12px">{{ a.brand }} {{ a.model }} · {{ a.kteo_date.strftime('%d/%m/%Y') }}</div>
+          </div>
+          <i class="bi bi-truck text-danger fs-5"></i>
+        </div>
+        {% endfor %}
+
+        {% for a in insurance_alerts %}
+        <div class="alert-item warning">
+          <div class="alert-days days-warning">{{ a.insurance_days_remaining }}</div>
+          <div style="flex:1; min-width:0">
+            <div class="fw-semibold" style="font-size:13px">{{ a.plate }} — Ασφάλεια</div>
+            <div class="text-muted" style="font-size:12px">{{ a.insurance_company or '—' }} · {{ a.insurance_expiry.strftime('%d/%m/%Y') }}</div>
+          </div>
+          <i class="bi bi-shield text-warning fs-5"></i>
+        </div>
+        {% endfor %}
+
+        {% if not expiring_documents and not kteo_alerts and not insurance_alerts %}
+        <p class="text-muted text-center py-3 mb-0">Δεν υπάρχουν επείγουσες ειδοποιήσεις.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Recent Activity ───────────────────────────────────────────────────── -->
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header justify-content-between">
+        <span><i class="bi bi-clock-history text-primary"></i> Πρόσφατα Έργα</span>
+        <a href="{{ url_for('projects.index') }}" class="btn btn-sm btn-outline-secondary">Όλα</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead><tr>
+            <th>Κωδ.</th><th>Τίτλος</th><th>Πρόοδος</th><th>Κατάσταση</th>
+          </tr></thead>
+          <tbody>
+            {% for p in recent_projects %}
+            <tr>
+              <td><a href="{{ url_for('projects.detail', id=p.id) }}" class="fw-bold text-decoration-none">{{ p.code }}</a></td>
+              <td class="text-truncate" style="max-width:160px">{{ p.title }}</td>
+              <td style="min-width:100px">
+                <div class="progress"><div class="progress-bar" style="width:{{ p.progress_pct }}%"></div></div>
+                <small class="text-muted">{{ p.progress_pct }}%</small>
+              </td>
+              <td><span class="badge status-{{ p.status }}">{{ p.status_label }}</span></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-center text-muted py-4">Δεν υπάρχουν έργα.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header justify-content-between">
+        <span><i class="bi bi-receipt text-primary"></i> Πρόσφατα Τιμολόγια</span>
+        <a href="{{ url_for('invoices.index') }}" class="btn btn-sm btn-outline-secondary">Όλα</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead><tr>
+            <th>Αρ.</th><th>Εκδότης</th><th>Ποσό</th><th>Κατάσταση</th>
+          </tr></thead>
+          <tbody>
+            {% for inv in recent_invoices %}
+            <tr>
+              <td class="fw-semibold">{{ inv.invoice_number or '#' + inv.id|string }}</td>
+              <td class="text-truncate" style="max-width:140px">{{ inv.issuer or '—' }}</td>
+              <td class="fw-semibold {% if inv.invoice_type=='income' %}text-success{% else %}text-danger{% endif %}">
+                {{ '{:,.2f}'.format(inv.total_amount|float) }}€
+              </td>
+              <td>
+                <span class="badge status-{{ inv.payment_status }}">
+                  {{ 'Πληρωμένο' if inv.payment_status=='paid' else 'Εκκρεμεί' if inv.payment_status=='pending' else 'Ληξιπρόθεσμο' }}
+                </span>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-center text-muted py-4">Δεν υπάρχουν τιμολόγια.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const monthlyData = {{ monthly_data | tojson }};
+buildLineChart('lineChart',
+  monthlyData.map(d => d.month),
+  monthlyData.map(d => d.income),
+  monthlyData.map(d => d.expense)
+);
+
+const statusData = {{ project_statuses | tojson }};
+const statusLabels = { planning:'Σχεδιασμός', active:'Ενεργό', paused:'Παύση', completed:'Ολοκληρώθηκε', cancelled:'Ακυρώθηκε' };
+buildDoughnutChart('projectsChart',
+  statusData.map(s => statusLabels[s[0]] || s[0]),
+  statusData.map(s => s[1]),
+  ['#2356a0','#16a34a','#d97706','#64748b','#dc2626']
+);
+</script>
+{% endblock %}

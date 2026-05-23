@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Προσφορές — ART ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Προσφορές</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h2 class="page-title mb-0"><i class="bi bi-file-earmark-text me-2 text-warning"></i>Προσφορές</h2>
+  <a href="{{ url_for('quotes.new') }}" class="btn btn-gold">
+    <i class="bi bi-plus-lg me-1"></i>Νέα Προσφορά
+  </a>
+</div>
+
+<!-- Status filter -->
+<div class="card card-dark mb-3">
+  <div class="card-body py-2">
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{{ url_for('quotes.index') }}" class="btn btn-sm {% if not status %}btn-gold{% else %}btn-outline-secondary{% endif %}">Όλες</a>
+      <a href="{{ url_for('quotes.index', status='draft') }}" class="btn btn-sm {% if status=='draft' %}btn-gold{% else %}btn-outline-secondary{% endif %}">Πρόχειρες</a>
+      <a href="{{ url_for('quotes.index', status='sent') }}" class="btn btn-sm {% if status=='sent' %}btn-gold{% else %}btn-outline-secondary{% endif %}">Εστάλησαν</a>
+      <a href="{{ url_for('quotes.index', status='accepted') }}" class="btn btn-sm {% if status=='accepted' %}btn-success{% else %}btn-outline-secondary{% endif %}">Αποδεκτές</a>
+      <a href="{{ url_for('quotes.index', status='rejected') }}" class="btn btn-sm {% if status=='rejected' %}btn-danger{% else %}btn-outline-secondary{% endif %}">Απορριφθείσες</a>
+    </div>
+  </div>
+</div>
+
+<div class="card card-dark">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-dark table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Τίτλος</th>
+            <th>Πελάτης</th>
+            <th>Ημ. Έκδοσης</th>
+            <th>Ισχύς έως</th>
+            <th class="text-end">Σύνολο €</th>
+            <th>Κατάσταση</th>
+            <th>Διαγωνισμός</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for q in quotes %}
+          <tr>
+            <td>
+              <a href="{{ url_for('quotes.detail', id=q.id) }}" class="text-warning text-decoration-none fw-bold">
+                {{ q.title }}
+              </a>
+            </td>
+            <td>{{ q.client_name or '—' }}</td>
+            <td>{{ q.issue_date.strftime('%d/%m/%Y') if q.issue_date else '—' }}</td>
+            <td class="{% if q.is_expired %}text-danger{% endif %}">
+              {{ q.valid_until.strftime('%d/%m/%Y') if q.valid_until else '—' }}
+              {% if q.is_expired %}<span class="badge bg-danger ms-1">Ληγμένη</span>{% endif %}
+            </td>
+            <td class="text-end fw-bold">{{ '{:,.2f}'.format(q.grand_total) }} €</td>
+            <td><span class="badge bg-{{ q.status_color }}">{{ q.status_label }}</span></td>
+            <td class="text-muted small">{{ q.tender.title[:30] if q.tender else '—' }}</td>
+            <td class="text-end">
+              <a href="{{ url_for('quotes.detail', id=q.id) }}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-eye"></i>
+              </a>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" class="text-center text-muted py-5">
+              <i class="bi bi-file-earmark-text fs-2 d-block mb-2 opacity-25"></i>
+              Δεν βρέθηκαν προσφορές.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

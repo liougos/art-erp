@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Υπεργολάβων — ART RESTORATION</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { background:#111; color:#fff; min-height:100vh; display:flex; align-items:center; justify-content:center; }
+    .login-card { background:#1a1a1a; border:1px solid #333; border-radius:12px; padding:2.5rem; width:100%; max-width:420px; }
+    .brand-gold { color:#c9a84c; }
+    .btn-gold { background:#c9a84c; color:#111; border:none; font-weight:600; }
+    .btn-gold:hover { background:#b8973a; color:#111; }
+    .form-control { background:#111; border-color:#333; color:#fff; }
+    .form-control:focus { background:#111; border-color:#c9a84c; color:#fff; box-shadow:0 0 0 0.2rem rgba(201,168,76,.15); }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="text-center mb-4">
+      <i class="bi bi-person-gear fs-1 brand-gold"></i>
+      <h4 class="mt-2 brand-gold">ART RESTORATION</h4>
+      <p class="text-muted small">Portal Υπεργολάβων</p>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+    <div class="alert alert-{{ 'danger' if cat in ('danger','error') else cat }} alert-dismissible">
+      {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+    {% endwith %}
+
+    <form method="post" action="{{ url_for('subcontractors.portal_login') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="mb-3">
+        <label class="form-label text-muted small">Username</label>
+        <input type="text" name="username" class="form-control" placeholder="Όνομα χρήστη" required autofocus>
+      </div>
+      <div class="mb-4">
+        <label class="form-label text-muted small">Password</label>
+        <input type="password" name="password" class="form-control" placeholder="Κωδικός" required>
+      </div>
+      <button type="submit" class="btn btn-gold w-100">
+        <i class="bi bi-box-arrow-in-right me-2"></i>Σύνδεση
+      </button>
+    </form>
+
+    <div class="text-center mt-4">
+      <a href="{{ url_for('auth.login') }}" class="text-muted small">← Σύνδεση Εργαζομένου / Διαχειριστή</a>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,303 @@
+{% extends 'base.html' %}
+{% block title %}Φορολογικές Προβλέψεις {{ year }} — ART ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('accounting.index') }}">Λογιστήριο</a></li>
+<li class="breadcrumb-item active">Φορολογικές Προβλέψεις {{ year }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h1 class="page-title"><i class="bi bi-graph-up-arrow me-2 text-gold"></i>Φορολογικές Προβλέψεις</h1>
+    <p class="page-subtitle text-muted">Εκτίμηση φορολογικών υποχρεώσεων βάσει ελληνικής νομοθεσίας</p>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <form method="get" class="d-flex gap-2">
+      <select name="year" class="form-select form-select-sm" onchange="this.form.submit()">
+        {% for y in years %}<option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+      </select>
+    </form>
+    <a href="{{ url_for('accounting.index', year=year) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Λογιστήριο
+    </a>
+  </div>
+</div>
+
+<div class="alert alert-info small mb-4">
+  <i class="bi bi-info-circle me-1"></i>
+  Οι παρακάτω υπολογισμοί είναι <strong>εκτιμητικοί</strong> βάσει ν.4172/2013 (Φόρος Εισοδήματος ΑΕ 22%),
+  ν.2859/2000 (ΦΠΑ), ΕΦΚΑ 2024 (25,06% εργοδότη / 13,87% εργαζόμενου),
+  ν.4549/2018 (Τέλος Επιτηδεύματος). Για ακριβή στοιχεία συμβουλευτείτε τον λογιστή σας.
+</div>
+
+<!-- Οικονομική Εικόνα -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-value text-success">{{ '{:,.0f}'.format(total_income) }}€</div>
+      <div class="kpi-label">Συνολικά Έσοδα {{ year }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-value text-danger">{{ '{:,.0f}'.format(total_expense + total_payroll) }}€</div>
+      <div class="kpi-label">Συνολικά Έξοδα (με μισθ.)</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-value {{ 'text-success' if gross_profit >= 0 else 'text-danger' }}">
+        {{ '{:,.0f}'.format(gross_profit) }}€
+      </div>
+      <div class="kpi-label">Μικτό Αποτέλεσμα</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-value text-danger">{{ '{:,.0f}'.format(total_tax_burden) }}€</div>
+      <div class="kpi-label">Συνολική Φορολογική Επιβάρυνση</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- ΦΠΑ -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header" style="background:#111;color:#c9a84c">
+        <i class="bi bi-percent me-2"></i>ΦΠΑ (Φόρος Προστιθέμενης Αξίας)
+      </div>
+      <div class="card-body">
+        <table class="table table-sm mb-3">
+          <tbody>
+            <tr><td>ΦΠΑ εισπραχθέν (από έσοδα)</td><td class="fw-semibold text-end">{{ '{:,.2f}'.format(vat_collected) }}€</td></tr>
+            <tr><td>ΦΠΑ πληρωθέν (σε έξοδα)</td><td class="text-end text-muted">({{ '{:,.2f}'.format(vat_paid) }}€)</td></tr>
+            <tr class="table-{{ 'danger' if vat_payable > 0 else 'success' }}">
+              <td class="fw-bold">{% if vat_payable > 0 %}Αποδοτέος ΦΠΑ{% else %}ΦΠΑ προς επιστροφή{% endif %}</td>
+              <td class="fw-bold text-end">{{ '{:,.2f}'.format(vat_payable if vat_payable > 0 else vat_credit) }}€</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="small text-muted">Καταβολή: μηνιαία ή τριμηνιαία (Τακτική Δήλωση ΦΠΑ)</div>
+
+        <!-- Monthly VAT chart -->
+        <canvas id="vatChart" height="120" class="mt-3"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Φόρος Εισοδήματος -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header" style="background:#111;color:#c9a84c">
+        <i class="bi bi-building-fill me-2"></i>Φόρος Εισοδήματος ΑΕ (22%)
+      </div>
+      <div class="card-body">
+        <table class="table table-sm mb-3">
+          <tbody>
+            <tr><td>Συνολικά Έσοδα</td><td class="text-end">{{ '{:,.2f}'.format(total_income) }}€</td></tr>
+            <tr><td>Λειτουργικά Έξοδα</td><td class="text-end text-muted">({{ '{:,.2f}'.format(total_expense) }}€)</td></tr>
+            <tr><td>Μισθοδοσία</td><td class="text-end text-muted">({{ '{:,.2f}'.format(total_payroll) }}€)</td></tr>
+            <tr><td>Αποσβέσεις (εκτιμητικές)</td><td class="text-end text-muted">({{ '{:,.2f}'.format(total_depreciation) }}€)</td></tr>
+            <tr class="table-light"><td class="fw-semibold">Φορολογητέο Εισόδημα</td><td class="fw-semibold text-end">{{ '{:,.2f}'.format(taxable_income) }}€</td></tr>
+            <tr class="table-warning">
+              <td class="fw-bold">Φόρος Εισοδήματος (22%)</td>
+              <td class="fw-bold text-end">{{ '{:,.2f}'.format(income_tax) }}€</td>
+            </tr>
+            <tr>
+              <td>Προκαταβολή Φόρου Επ. Χρήσης (80%)</td>
+              <td class="text-end">{{ '{:,.2f}'.format(tax_prepayment) }}€</td>
+            </tr>
+            <tr>
+              <td>Τέλος Επιτηδεύματος (ΑΕ)</td>
+              <td class="text-end">{{ '{:,.2f}'.format(business_tax) }}€</td>
+            </tr>
+            <tr class="table-danger">
+              <td class="fw-bold">Σύνολο Φόρων Εισοδήματος</td>
+              <td class="fw-bold text-end">{{ '{:,.2f}'.format(income_tax + tax_prepayment + business_tax) }}€</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="small text-muted">Υποβολή Ε3/Ε7 & εκκαθάριση φόρου: Ιούλιος (εκ. λογαριασμός)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Αποσβέσεις -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header" style="background:#111;color:#c9a84c">
+        <i class="bi bi-tools me-2"></i>Πάγια & Αποσβέσεις (Π.Δ. 299/2003)
+      </div>
+      <div class="card-body">
+        <table class="table table-sm mb-3">
+          <tbody>
+            <tr>
+              <td>Μηχανήματα / Εξοπλισμός (10%/έτος)</td>
+              <td class="text-end">{{ '{:,.2f}'.format(depreciation_equipment) }}€</td>
+            </tr>
+            <tr>
+              <td>Οχήματα (20%/έτος)</td>
+              <td class="text-end">{{ '{:,.2f}'.format(depreciation_vehicles) }}€</td>
+            </tr>
+            <tr class="table-light">
+              <td class="fw-semibold">Σύνολο Αποσβέσεων</td>
+              <td class="fw-semibold text-end">{{ '{:,.2f}'.format(total_depreciation) }}€</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="small text-muted mb-2">Εκπίπτουν από τα φορολογητέα κέρδη (μειώνουν φόρο).</div>
+        <div class="small">
+          <strong>Συντελεστές ΚΑ 1553 Π.Δ.299/2003:</strong><br>
+          Μηχανήματα εργοταξίου: 10% · Οχήματα: 20% · Η/Υ: 20% · Κτήρια: 4%
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ΕΦΚΑ / Μισθοδοσία -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header" style="background:#111;color:#c9a84c">
+        <i class="bi bi-people-fill me-2"></i>ΕΦΚΑ & Μισθοδοσία ({{ active_employees }} ενεργοί υπάλληλοι)
+      </div>
+      <div class="card-body">
+        <table class="table table-sm mb-3">
+          <tbody>
+            <tr><td>Ακαθάριστες αποδοχές (ετήσιες)</td><td class="fw-semibold text-end">{{ '{:,.2f}'.format(gross_payroll) }}€</td></tr>
+            <tr>
+              <td>ΕΦΚΑ Εργοδότη (25,06%)</td>
+              <td class="text-end text-danger">{{ '{:,.2f}'.format(efka_employer) }}€</td>
+            </tr>
+            <tr>
+              <td>ΕΦΚΑ Εργαζόμενου (13,87%)</td>
+              <td class="text-end text-muted">({{ '{:,.2f}'.format(efka_employee) }}€)</td>
+            </tr>
+            <tr class="table-light">
+              <td class="fw-semibold">Καθαρές αποδοχές (εκτιμητικά)</td>
+              <td class="fw-semibold text-end">{{ '{:,.2f}'.format(net_payroll) }}€</td>
+            </tr>
+            <tr class="table-warning">
+              <td class="fw-bold">Συνολικό Κόστος Εργαζομένων</td>
+              <td class="fw-bold text-end">{{ '{:,.2f}'.format(total_labor_cost) }}€</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="small text-muted">
+          Δήλωση ΑΠΔ: μηνιαία έως 31η εκάστου · Καταβολή: έως 31η επόμενου
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Μηνιαίος πίνακας ΦΠΑ -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header" style="background:#111;color:#c9a84c">
+        <i class="bi bi-table me-2"></i>Μηνιαία Ανάλυση ΦΠΑ {{ year }}
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>Μήνας</th>
+              <th class="text-end">ΦΠΑ Εισπρακτέο</th>
+              <th class="text-end">ΦΠΑ Πληρωτέο</th>
+              <th class="text-end">Καθαρό</th>
+              <th style="width:200px">Γράφημα</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% set month_names = ['Ιαν','Φεβ','Μαρ','Απρ','Μαϊ','Ιουν','Ιουλ','Αυγ','Σεπ','Οκτ','Νοε','Δεκ'] %}
+            {% set max_val = monthly_vat | map(attribute='collected') | max %}
+            {% set max_val = [max_val, 1] | max %}
+            {% for m in monthly_vat %}
+            {% set net = m.collected - m.paid %}
+            <tr class="{{ 'table-danger' if net < 0 else '' }}">
+              <td class="fw-semibold">{{ month_names[m.month-1] }}</td>
+              <td class="text-end">{{ '{:,.0f}'.format(m.collected) }}€</td>
+              <td class="text-end text-muted">({{ '{:,.0f}'.format(m.paid) }}€)</td>
+              <td class="text-end fw-semibold {{ 'text-success' if net >= 0 else 'text-danger' }}">
+                {{ '{:+,.0f}'.format(net) }}€
+              </td>
+              <td>
+                <div class="d-flex gap-1 align-items-center" style="height:18px">
+                  <div class="bg-success" style="height:10px;width:{{ (m.collected / max_val * 140)|int }}px;border-radius:2px" title="Εισπρακτέο"></div>
+                  <div class="bg-danger" style="height:10px;width:{{ (m.paid / max_val * 140)|int }}px;border-radius:2px" title="Πληρωτέο"></div>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+            <tr class="table-dark fw-bold">
+              <td>Σύνολο</td>
+              <td class="text-end">{{ '{:,.0f}'.format(vat_collected) }}€</td>
+              <td class="text-end">({{ '{:,.0f}'.format(vat_paid) }}€)</td>
+              <td class="text-end {{ 'text-warning' if vat_payable > 0 else 'text-success' }}">
+                {{ '{:+,.0f}'.format(vat_collected - vat_paid) }}€
+              </td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Συνοπτικό Φορολογικό Ημερολόγιο -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header" style="background:#111;color:#c9a84c">
+        <i class="bi bi-calendar-check me-2"></i>Φορολογικό Ημερολόγιο {{ year }}
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          {% set deadlines = [
+            ('Ιαν–Δεκ', 'Μηνιαία δήλωση ΦΠΑ', 'info'),
+            ('Ιαν–Δεκ', 'Μηνιαία ΑΠΔ (ΕΦΚΑ)', 'info'),
+            ('Μαρ 31', 'Κατάθεση παρακρατούμενων φόρων (Φεβρ.)', 'warning'),
+            ('Ιουν', 'Υποβολή φορολογικής δήλωσης (Ε3/Ε7)', 'danger'),
+            ('Ιουλ', 'Εκκαθάριση φόρου εισοδήματος', 'danger'),
+            ('Ιουλ', 'Α\' δόση προκαταβολής φόρου', 'warning'),
+            ('Δεκ', 'Β\' δόση προκαταβολής φόρου', 'warning'),
+            ('Ιαν–Δεκ', 'Τέλος Επιτηδεύματος (ΑΕ €1.000)', 'secondary'),
+          ] %}
+          {% for month, desc, color in deadlines %}
+          <div class="col-md-3">
+            <div class="p-3 rounded border-start border-4 border-{{ color }}" style="background:#f9f9f9">
+              <div class="fw-bold text-{{ color }} small">{{ month }}</div>
+              <div class="small">{{ desc }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const monthNames = ['Ιαν','Φεβ','Μαρ','Απρ','Μαϊ','Ιουν','Ιουλ','Αυγ','Σεπ','Οκτ','Νοε','Δεκ'];
+const vatData = {{ monthly_vat | tojson }};
+
+const ctx = document.getElementById('vatChart');
+if (ctx) {
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: vatData.map(d => monthNames[d.month - 1]),
+      datasets: [
+        { label: 'ΦΠΑ Εισπρακτέο', data: vatData.map(d => d.collected), backgroundColor: 'rgba(25,135,84,0.7)' },
+        { label: 'ΦΠΑ Πληρωτέο', data: vatData.map(d => d.paid), backgroundColor: 'rgba(220,53,69,0.7)' },
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'top' } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+}
+</script>
+{% endblock %}

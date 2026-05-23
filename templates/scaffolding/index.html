@@ -1,0 +1,371 @@
+{% extends "base.html" %}
+{% block title %}Σκαλωσιές — ART ERP{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Σκαλωσιές</li>{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <h2 class="page-title mb-0"><i class="bi bi-ladder me-2 text-warning"></i>Διαχείριση Σκαλωσιών</h2>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('scaffolding.history') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-clock-history me-1"></i>Ιστορικό
+    </a>
+    {% if current_user.role in ('admin','manager') %}
+    <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNewItem">
+      <i class="bi bi-plus-lg me-1"></i>Νέο Εξάρτημα
+    </button>
+    <button class="btn btn-gold" data-bs-toggle="modal" data-bs-target="#modalAssign">
+      <i class="bi bi-arrow-right-circle me-1"></i>Ανάθεση σε Έργο
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-warning"><i class="bi bi-grid-3x3-gap"></i></div>
+      <div class="stat-value">{{ items|length }}</div>
+      <div class="stat-label">Τύποι Εξαρτημάτων</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-success"><i class="bi bi-check-circle"></i></div>
+      <div class="stat-value">{{ assignments|length }}</div>
+      <div class="stat-label">Αναθέσεις σε Χρήση</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-danger"><i class="bi bi-currency-euro"></i></div>
+      <div class="stat-value">{{ '{:,.0f}'.format(assignments|sum(attribute='rental_cost_total')) }} €</div>
+      <div class="stat-label">Κόστος Ενοικίου (τρέχον)</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-primary"><i class="bi bi-boxes"></i></div>
+      <div class="stat-value">{{ items|sum(attribute='quantity_owned') }}</div>
+      <div class="stat-label">Σύνολο Εξαρτημάτων</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Inventory -->
+  <div class="col-lg-5">
+    <div class="card card-dark">
+      <div class="card-header border-secondary"><h6 class="mb-0">Απόθεμα Εξαρτημάτων</h6></div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-dark table-hover mb-0">
+            <thead><tr><th>Τύπος</th><th>Κωδικός</th><th class="text-end">Σύνολο</th><th class="text-end">Διαθέσιμα</th><th>Κατ.</th><th></th></tr></thead>
+            <tbody>
+              {% for item in items %}
+              <tr>
+                <td><strong>{{ item.type_label }}</strong></td>
+                <td class="small text-muted">{{ item.code or '—' }}</td>
+                <td class="text-end">{{ item.quantity_owned }}</td>
+                <td class="text-end {{ 'text-success' if item.quantity_available > 0 else 'text-danger' }}">
+                  {{ item.quantity_available }}
+                </td>
+                <td>
+                  {% set cond_c = {'good':'success','fair':'warning','damaged':'danger','retired':'secondary'} %}
+                  <span class="badge bg-{{ cond_c.get(item.condition,'secondary') }}" style="font-size:9px">{{ item.condition }}</span>
+                </td>
+                <td>
+                  {% if current_user.role in ('admin','manager') %}
+                  <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEditItem{{ item.id }}">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  {% endif %}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="6" class="text-center text-muted py-3 small">Δεν υπάρχουν εξαρτήματα.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Active Assignments -->
+  <div class="col-lg-7">
+    <div class="card card-dark">
+      <div class="card-header border-secondary"><h6 class="mb-0">Ενεργές Αναθέσεις</h6></div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-dark table-hover mb-0">
+            <thead>
+              <tr><th>Έργο</th><th>Εξόδου</th><th>Αναμ. Επιστ.</th><th class="text-end">Ημέρες</th><th class="text-end">Κόστος €</th><th>Εγκατ.</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for a in assignments %}
+              <tr>
+                <td>
+                  {% if a.project %}
+                  <a href="{{ url_for('projects.detail', id=a.project.id) }}" class="text-warning text-decoration-none">
+                    [{{ a.project.code }}]
+                  </a>
+                  {{ a.project.title[:20] }}
+                  {% else %}—{% endif %}
+                  {% if a.is_rented %}<span class="badge bg-info ms-1" style="font-size:9px">Ενοίκιο</span>{% endif %}
+                </td>
+                <td class="small">{{ a.date_out.strftime('%d/%m/%Y') if a.date_out else '—' }}</td>
+                <td class="small {% if a.date_in_expected and a.date_in_expected < today %}text-danger{% endif %}">
+                  {{ a.date_in_expected.strftime('%d/%m/%Y') if a.date_in_expected else '—' }}
+                </td>
+                <td class="text-end">{{ a.days_deployed }}</td>
+                <td class="text-end {{ 'text-danger' if a.rental_cost_total > 0 else 'text-muted' }}">
+                  {% if a.rental_cost_total > 0 %}{{ '{:,.0f}'.format(a.rental_cost_total) }} €{% else %}—{% endif %}
+                </td>
+                <td class="small text-muted">
+                  {% if a.assembly_by == 'subcontractor' and a.assembly_subcontractor %}
+                  {{ a.assembly_subcontractor.company_name[:15] }}
+                  {% else %}Εσωτερικά{% endif %}
+                </td>
+                <td>
+                  <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-info" title="Έλεγχος Ασφάλειας"
+                            data-bs-toggle="modal" data-bs-target="#modalInspect{{ a.id }}">
+                      <i class="bi bi-clipboard-check"></i>
+                    </button>
+                    {% if current_user.role in ('admin','manager') %}
+                    <form method="post" action="{{ url_for('scaffolding.return_assignment', id=a.id) }}"
+                          onsubmit="return confirm('Επιστροφή σκαλωσιάς;')" class="d-inline">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="btn btn-outline-warning" title="Επιστροφή">
+                        <i class="bi bi-arrow-return-left"></i>
+                      </button>
+                    </form>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="7" class="text-center text-muted py-4 small">Δεν υπάρχουν ενεργές αναθέσεις.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── MODALS ── -->
+
+<!-- New Item -->
+<div class="modal fade" id="modalNewItem" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Νέο Εξάρτημα Σκαλωσιάς</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('scaffolding.new_item') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label">Τύπος *</label>
+              <select name="item_type" class="form-select bg-dark text-white border-secondary">
+                {% for k,v in item_types %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+              </select></div>
+            <div class="col-md-6"><label class="form-label">Κωδικός</label>
+              <input type="text" name="code" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-md-4"><label class="form-label">Ποσότητα</label>
+              <input type="number" name="quantity_owned" class="form-control bg-dark text-white border-secondary" value="0"></div>
+            <div class="col-md-4"><label class="form-label">Κατάσταση</label>
+              <select name="condition" class="form-select bg-dark text-white border-secondary">
+                <option value="good">Καλή</option><option value="fair">Μέτρια</option><option value="damaged">Κατεστραμμένο</option>
+              </select></div>
+            <div class="col-md-4"><label class="form-label">Τιμή Αγοράς €</label>
+              <input type="number" step="0.01" name="purchase_price" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-md-6"><label class="form-label">Ημ. Αγοράς</label>
+              <input type="date" name="purchase_date" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-md-6"><label class="form-label">Τοποθεσία</label>
+              <input type="text" name="location" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-12"><label class="form-label">Περιγραφή / Σημειώσεις</label>
+              <textarea name="description" class="form-control bg-dark text-white border-secondary" rows="2"></textarea></div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-gold">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Assign to Project -->
+<div class="modal fade" id="modalAssign" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-arrow-right-circle me-2 text-warning"></i>Ανάθεση Σκαλωσιάς σε Έργο</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('scaffolding.assign') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label">Έργο *</label>
+              <select name="project_id" class="form-select bg-dark text-white border-secondary" required>
+                {% for p in projects %}<option value="{{ p.id }}">[{{ p.code }}] {{ p.title[:40] }}</option>{% endfor %}
+              </select></div>
+            <div class="col-md-3"><label class="form-label">Ημ. Εξόδου</label>
+              <input type="date" name="date_out" class="form-control bg-dark text-white border-secondary" value="{{ today }}"></div>
+            <div class="col-md-3"><label class="form-label">Αναμ. Επιστροφή</label>
+              <input type="date" name="date_in_expected" class="form-control bg-dark text-white border-secondary"></div>
+
+            <div class="col-md-4"><label class="form-label">Τύπος</label>
+              <select name="is_rented" class="form-select bg-dark text-white border-secondary" id="isRented">
+                <option value="0">Ιδιόκτητη</option>
+                <option value="1">Ενοικιαζόμενη (εξωτερική)</option>
+              </select></div>
+            <div class="col-md-4 rental-field d-none"><label class="form-label">Προμηθευτής Ενοικίου</label>
+              <input type="text" name="rental_supplier" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-md-4 rental-field d-none"><label class="form-label">Ημερήσιο Κόστος €</label>
+              <input type="number" step="0.01" name="daily_rental_cost" class="form-control bg-dark text-white border-secondary" value="0"></div>
+
+            <div class="col-md-6"><label class="form-label">Εγκατάσταση από</label>
+              <select name="assembly_by" class="form-select bg-dark text-white border-secondary" id="assemblyBy">
+                <option value="internal">Εσωτερικό Συνεργείο</option>
+                <option value="subcontractor">Υπεργολάβο</option>
+              </select></div>
+            <div class="col-md-6 sub-field d-none"><label class="form-label">Υπεργολάβος</label>
+              <select name="assembly_subcontractor_id" class="form-select bg-dark text-white border-secondary">
+                <option value="">— Επιλογή —</option>
+                {% for s in subcontractors %}<option value="{{ s.id }}">{{ s.company_name }}</option>{% endfor %}
+              </select></div>
+
+            <div class="col-12"><hr class="border-secondary"><h6 class="text-muted">Εξαρτήματα (για ιδιόκτητη σκαλωσιά)</h6></div>
+            <div class="col-12" id="linesContainer">
+              {% for item in items %}
+              <div class="row g-2 mb-2 align-items-center">
+                <div class="col-8"><label class="small text-muted">{{ item.type_label }} {{ item.code or '' }} (διαθ: {{ item.quantity_available }})</label></div>
+                <div class="col-4">
+                  <input type="number" name="line_quantity[]" min="0" max="{{ item.quantity_available }}" value="0"
+                         class="form-control form-control-sm bg-dark text-white border-secondary">
+                  <input type="hidden" name="line_item_id[]" value="{{ item.id }}">
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+
+            <div class="col-12"><label class="form-label">Σημειώσεις</label>
+              <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="2"></textarea></div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-gold">Ανάθεση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Inspection Modals -->
+{% for a in assignments %}
+<div class="modal fade" id="modalInspect{{ a.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Έλεγχος Ασφάλειας — {{ a.project.code if a.project else '' }}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('scaffolding.add_inspection', id=a.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label">Ημ. Ελέγχου</label>
+              <input type="date" name="inspection_date" class="form-control bg-dark text-white border-secondary" value="{{ today }}"></div>
+            <div class="col-md-6"><label class="form-label">Επόμενος Έλεγχος</label>
+              <input type="date" name="next_inspection" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-md-6"><label class="form-label">Επιθεωρητής</label>
+              <select name="inspector_id" class="form-select bg-dark text-white border-secondary">
+                <option value="">— Επιλογή —</option>
+                {% for emp in employees %}<option value="{{ emp.id }}">{{ emp.full_name }}</option>{% endfor %}
+              </select></div>
+            <div class="col-md-6"><label class="form-label">Αποτέλεσμα</label>
+              <select name="result" class="form-select bg-dark text-white border-secondary">
+                <option value="pass">✓ Εγκρίθηκε</option>
+                <option value="conditional">⚠ Υπό Αίρεση</option>
+                <option value="fail">✗ Απορρίφθηκε</option>
+              </select></div>
+            <div class="col-12"><label class="form-label">Παρατηρήσεις</label>
+              <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="3"></textarea></div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-info text-dark">Καταγραφή</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<!-- Edit Item Modals -->
+{% for item in items %}
+<div class="modal fade" id="modalEditItem{{ item.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Επεξεργασία: {{ item.type_label }}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('scaffolding.edit_item', id=item.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label">Τύπος</label>
+              <select name="item_type" class="form-select bg-dark text-white border-secondary">
+                {% for k,v in item_types %}<option value="{{ k }}" {% if item.item_type==k %}selected{% endif %}>{{ v }}</option>{% endfor %}
+              </select></div>
+            <div class="col-md-6"><label class="form-label">Κωδικός</label>
+              <input type="text" name="code" class="form-control bg-dark text-white border-secondary" value="{{ item.code or '' }}"></div>
+            <div class="col-md-4"><label class="form-label">Ποσότητα</label>
+              <input type="number" name="quantity_owned" class="form-control bg-dark text-white border-secondary" value="{{ item.quantity_owned }}"></div>
+            <div class="col-md-4"><label class="form-label">Κατάσταση</label>
+              <select name="condition" class="form-select bg-dark text-white border-secondary">
+                <option value="good" {% if item.condition=='good' %}selected{% endif %}>Καλή</option>
+                <option value="fair" {% if item.condition=='fair' %}selected{% endif %}>Μέτρια</option>
+                <option value="damaged" {% if item.condition=='damaged' %}selected{% endif %}>Κατεστραμμένο</option>
+                <option value="retired" {% if item.condition=='retired' %}selected{% endif %}>Αποσυρμένο</option>
+              </select></div>
+            <div class="col-md-4"><label class="form-label">Τοποθεσία</label>
+              <input type="text" name="location" class="form-control bg-dark text-white border-secondary" value="{{ item.location or '' }}"></div>
+            <div class="col-12"><label class="form-label">Περιγραφή</label>
+              <textarea name="description" class="form-control bg-dark text-white border-secondary" rows="2">{{ item.description or '' }}</textarea></div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('isRented').addEventListener('change', function() {
+  const show = this.value === '1';
+  document.querySelectorAll('.rental-field').forEach(el => el.classList.toggle('d-none', !show));
+});
+document.getElementById('assemblyBy').addEventListener('change', function() {
+  document.querySelectorAll('.sub-field').forEach(el => el.classList.toggle('d-none', this.value !== 'subcontractor'));
+});
+</script>
+{% endblock %}

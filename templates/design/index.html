@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Σχεδιασμός — ART ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Σχεδιασμός</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h2 class="page-title mb-0"><i class="bi bi-pencil-square me-2 text-warning"></i>Μελέτες & Σχεδιασμός</h2>
+  <a href="{{ url_for('design.new') }}" class="btn btn-gold">
+    <i class="bi bi-plus-lg me-1"></i>Νέα Μελέτη
+  </a>
+</div>
+
+<!-- Stats -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-value brand-gold">{{ total }}</div>
+      <div class="stat-label">Συνολικά</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-value text-warning">{{ pending }}</div>
+      <div class="stat-label">Σε Εξέλιξη / Αναμονή</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-value text-success">{{ approved }}</div>
+      <div class="stat-label">Εγκρίθηκαν</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-value text-primary">{{ final }}</div>
+      <div class="stat-label">Οριστικοποιήθηκαν</div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="card card-dark mb-4">
+  <div class="card-body py-3">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">Κατάσταση</label>
+        <select name="status" class="form-select form-select-sm bg-dark text-white border-secondary">
+          <option value="">— Όλες —</option>
+          {% for val, lbl in statuses %}
+          <option value="{{ val }}" {{ 'selected' if status_filter == val }}>{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">Τύπος</label>
+        <select name="design_type" class="form-select form-select-sm bg-dark text-white border-secondary">
+          <option value="">— Όλοι —</option>
+          {% for val, lbl in design_types %}
+          <option value="{{ val }}" {{ 'selected' if type_filter == val }}>{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">Έργο</label>
+        <select name="project_id" class="form-select form-select-sm bg-dark text-white border-secondary">
+          <option value="">— Όλα τα Έργα —</option>
+          {% for p in projects %}
+          <option value="{{ p.id }}" {{ 'selected' if project_filter|string == p.id|string }}>
+            [{{ p.code }}] {{ p.title[:30] }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-warning">
+          <i class="bi bi-funnel me-1"></i>Φίλτρο
+        </button>
+        {% if status_filter or type_filter or project_filter %}
+        <a href="{{ url_for('design.index') }}" class="btn btn-sm btn-outline-secondary ms-1">
+          <i class="bi bi-x-circle me-1"></i>Καθαρισμός
+        </a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Design Cards Grid -->
+{% if designs %}
+<div class="row g-3">
+  {% for dp in designs %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card card-dark h-100" style="border-left:3px solid var(--bs-{{ dp.status_color }})">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <span class="badge bg-{{ dp.status_color }}">{{ dp.status_label }}</span>
+          <span class="badge bg-{{ dp.priority_color }} text-uppercase" style="font-size:9px">{{ dp.priority }}</span>
+        </div>
+
+        <h6 class="mb-1">
+          <a href="{{ url_for('design.detail', id=dp.id) }}" class="text-warning text-decoration-none">
+            {{ dp.title[:60] }}
+          </a>
+        </h6>
+        <div class="text-muted small mb-2">
+          <span class="badge bg-secondary me-1">{{ dp.type_label }}</span>
+          {% if dp.project %}
+          <span class="text-warning">[{{ dp.project.code }}]</span> {{ dp.project.title[:25] }}
+          {% endif %}
+        </div>
+
+        {% if dp.description %}
+        <p class="small text-muted mb-2" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
+          {{ dp.description }}
+        </p>
+        {% endif %}
+
+        <div class="d-flex justify-content-between align-items-center mt-auto pt-2 border-top border-secondary small text-muted">
+          <span>
+            {% if dp.designer %}
+            <i class="bi bi-person me-1"></i>{{ dp.designer.full_name }}
+            {% elif dp.assigned_sub %}
+            <i class="bi bi-person-gear me-1"></i>{{ dp.assigned_sub.company_name[:20] }}
+            {% else %}—{% endif %}
+          </span>
+          <span>
+            {% if dp.deadline %}
+            <i class="bi bi-calendar3 me-1"></i>
+            <span class="{{ 'text-danger fw-bold' if dp.deadline < today and dp.status not in ('approved','final') else '' }}">
+              {{ dp.deadline.strftime('%d/%m/%Y') }}
+            </span>
+            {% endif %}
+          </span>
+        </div>
+
+        <div class="d-flex gap-2 mt-2 justify-content-between small text-muted">
+          <span><i class="bi bi-layers me-1"></i>{{ dp.revision_count }} εκδόσεις</span>
+          {% if dp.budget %}
+          <span><i class="bi bi-currency-euro me-1"></i>{{ '{:,.0f}'.format(dp.budget|float) }} € budget</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card card-dark">
+  <div class="card-body text-center text-muted py-5">
+    <i class="bi bi-pencil-square fs-1 d-block mb-3 opacity-25"></i>
+    Δεν βρέθηκαν μελέτες.
+    <div class="mt-2">
+      <a href="{{ url_for('design.new') }}" class="btn btn-sm btn-gold">Προσθήκη Πρώτης Μελέτης</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

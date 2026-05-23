@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Νέος Χρήστης — ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('auth.users') }}">Χρήστες</a></li>
+<li class="breadcrumb-item active">Νέος Χρήστης</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><i class="bi bi-person-plus me-2 text-primary"></i>Νέος Χρήστης</h1>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-shield-lock"></i> Στοιχεία Πρόσβασης</div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('auth.new_user') }}" class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Username *</label>
+            <input type="text" name="username" class="form-control" required autocomplete="off"
+              placeholder="π.χ. giannis.papadopoulos">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Πλήρες Όνομα</label>
+            <input type="text" name="full_name" class="form-control" placeholder="π.χ. Γιάννης Παπαδόπουλος">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" class="form-control">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Κωδικός Πρόσβασης *</label>
+            <input type="password" name="password" class="form-control" required autocomplete="new-password" minlength="6">
+            <div class="form-text">Τουλάχιστον 6 χαρακτήρες.</div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Ρόλος</label>
+            <select name="role" class="form-select" id="roleSelect" onchange="toggleEmployee(this.value)">
+              <option value="user">Χρήστης — Βασική πρόσβαση</option>
+              <option value="manager">Υπεύθυνος — Επεξεργασία δεδομένων</option>
+              <option value="admin">Διαχειριστής — Πλήρης πρόσβαση</option>
+              <option value="worker">Εργαζόμενος — Μόνο έργα & αναφορές</option>
+            </select>
+          </div>
+          <div class="col-12" id="employeeField">
+            <label class="form-label">Σύνδεση με Υπάλληλο
+              <span class="text-muted small">(απαραίτητο για εργαζόμενους)</span>
+            </label>
+            <select name="employee_id" class="form-select">
+              <option value="">— Κανένας —</option>
+              {% for emp in employees %}
+              <option value="{{ emp.id }}">{{ emp.full_name }} · {{ emp.specialty or '' }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">Επιλέξτε τον αντίστοιχο υπάλληλο ώστε να βλέπει τα έργα του.</div>
+          </div>
+          <div class="col-12 d-flex gap-2 pt-2">
+            <button type="submit" class="btn btn-primary flex-fill">
+              <i class="bi bi-check2 me-1"></i>Δημιουργία
+            </button>
+            <a href="{{ url_for('auth.users') }}" class="btn btn-outline-secondary flex-fill">Ακύρωση</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleEmployee(role) {
+  document.getElementById('employeeField').style.display =
+    (role === 'worker' || role === 'user') ? 'block' : 'none';
+}
+toggleEmployee(document.getElementById('roleSelect').value);
+</script>
+{% endblock %}

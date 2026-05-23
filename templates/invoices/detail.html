@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block title %}{{ inv.invoice_number or 'Τιμολόγιο #'+inv.id|string }} — ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('invoices.index') }}">Τιμολόγια</a></li>
+<li class="breadcrumb-item active">{{ inv.invoice_number or '#'+inv.id|string }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <span class="badge {% if inv.invoice_type=='income' %}bg-success{% else %}bg-danger{% endif %} fs-6">
+        {% if inv.invoice_type == 'income' %}ΕΣΟΔΟ{% else %}ΕΞΟΔΟ{% endif %}
+      </span>
+      <span class="badge status-{{ inv.payment_status }}">
+        {{ {'unpaid':'Απλήρωτο','partial':'Μερική Πληρωμή','paid':'Εξοφλημένο'}.get(inv.payment_status, inv.payment_status) }}
+      </span>
+    </div>
+    <h1 class="page-title">{{ inv.invoice_number or 'Τιμολόγιο #'+inv.id|string }}</h1>
+    <p class="page-subtitle">{{ inv.issuer or inv.recipient or '—' }} · {{ inv.invoice_date.strftime('%d/%m/%Y') if inv.invoice_date else '—' }}</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('invoices.edit', id=inv.id) }}" class="btn btn-outline-secondary">
+      <i class="bi bi-pencil me-1"></i>Επεξεργασία
+    </a>
+    {% if inv.file_path %}
+    <a href="{{ url_for('invoices.view_file', id=inv.id) }}" target="_blank" class="btn btn-outline-primary">
+      <i class="bi bi-file-earmark-pdf me-1"></i>Αρχείο
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Left: Invoice details -->
+  <div class="col-lg-8">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-receipt text-primary"></i> Στοιχεία Τιμολογίου</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <dl class="row mb-0" style="font-size:13px">
+              <dt class="col-5 text-muted">Αρ. Τιμολογίου</dt>
+              <dd class="col-7 fw-semibold"><code>{{ inv.invoice_number or '—' }}</code></dd>
+              <dt class="col-5 text-muted">{% if inv.invoice_type=='income' %}Εκδότης{% else %}Λήπτης{% endif %}</dt>
+              <dd class="col-7">{{ inv.issuer if inv.invoice_type=='income' else (inv.recipient or '—') }}</dd>
+              <dt class="col-5 text-muted">ΑΦΜ</dt>
+              <dd class="col-7"><code>{{ inv.issuer_afm or '—' }}</code></dd>
+              <dt class="col-5 text-muted">Ημ/νία</dt>
+              <dd class="col-7">{{ inv.invoice_date.strftime('%d/%m/%Y') if inv.invoice_date else '—' }}</dd>
+              <dt class="col-5 text-muted">Κατηγορία</dt>
+              <dd class="col-7">{{ inv.category or '—' }}</dd>
+            </dl>
+          </div>
+          <div class="col-md-6">
+            <dl class="row mb-0" style="font-size:13px">
+              <dt class="col-5 text-muted">Έργο</dt>
+              <dd class="col-7">{% if inv.project %}<a href="{{ url_for('projects.detail', id=inv.project.id) }}">{{ inv.project.code }}</a>{% else %}—{% endif %}</dd>
+              <dt class="col-5 text-muted">Μέθοδος Πληρ.</dt>
+              <dd class="col-7">{{ inv.payment_method or '—' }}</dd>
+              <dt class="col-5 text-muted">Ημ. Λήξης</dt>
+              <dd class="col-7 {% if inv.due_date and inv.due_date < today and inv.payment_status != 'paid' %}text-danger fw-bold{% endif %}">
+                {{ inv.due_date.strftime('%d/%m/%Y') if inv.due_date else '—' }}
+              </dd>
+              <dt class="col-5 text-muted">Ημ. Πληρωμής</dt>
+              <dd class="col-7">{{ inv.payment_date.strftime('%d/%m/%Y') if inv.payment_date else '—' }}</dd>
+            </dl>
+          </div>
+          {% if inv.notes %}
+          <div class="col-12">
+            <hr class="my-1">
+            <small class="text-muted"><i class="bi bi-sticky me-1"></i>{{ inv.notes }}</small>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Payment history -->
+    <div class="card mb-3" id="payments">
+      <div class="card-header justify-content-between">
+        <span><i class="bi bi-cash-coin text-primary"></i> Ιστορικό Πληρωμών</span>
+        {% if inv.payment_status != 'paid' %}
+        <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#addPaymentModal">
+          <i class="bi bi-plus me-1"></i>Καταχώρηση Πληρωμής
+        </button>
+        {% endif %}
+      </div>
+      {% if inv.payments %}
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Ημ/νία</th><th>Ποσό</th><th>Μέθοδος</th><th>Λογαριασμός</th><th>Σημειώσεις</th><th></th></tr></thead>
+          <tbody>
+            {% for p in inv.payments %}
+            <tr>
+              <td>{{ p.payment_date.strftime('%d/%m/%Y') }}</td>
+              <td class="fw-semibold text-success">{{ '{:,.2f}'.format(p.amount|float) }}€</td>
+              <td>{{ p.payment_method or '—' }}</td>
+              <td>{{ p.bank_account.name if p.bank_account else '—' }}</td>
+              <td><small class="text-muted">{{ p.notes or '' }}</small></td>
+              <td>
+                {% if current_user.role in ('admin', 'manager') %}
+                <form method="POST" action="{{ url_for('invoices.delete_payment', id=inv.id, pid=p.id) }}">
+                  <button type="submit" class="btn btn-sm btn-outline-danger"
+                          onclick="return confirm('Διαγραφή πληρωμής;')">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-center text-muted py-3">
+        <i class="bi bi-cash-coin d-block fs-2 opacity-25 mb-2"></i>
+        Δεν υπάρχουν καταχωρημένες πληρωμές
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Right: Amounts -->
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-currency-euro text-primary"></i> Ποσά</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-6 text-muted">Καθαρή Αξία</dt>
+          <dd class="col-6 fw-semibold text-end">{{ '{:,.2f}'.format((inv.amount_net or 0)|float) }}€</dd>
+          <dt class="col-6 text-muted">ΦΠΑ ({{ inv.vat_rate or 24 }}%)</dt>
+          <dd class="col-6 text-end">{{ '{:,.2f}'.format((inv.vat_amount or 0)|float) }}€</dd>
+          <dt class="col-6 text-muted border-top pt-2">Σύνολο</dt>
+          <dd class="col-6 fw-bold text-end border-top pt-2 {% if inv.invoice_type=='income' %}text-success{% else %}text-danger{% endif %}" style="font-size:18px">
+            {{ '{:,.2f}'.format(inv.total_amount|float) }}€
+          </dd>
+          <dt class="col-6 text-muted mt-3">Πληρωμένο</dt>
+          <dd class="col-6 text-success fw-semibold text-end mt-3">{{ '{:,.2f}'.format(inv.total_paid) }}€</dd>
+          <dt class="col-6 text-muted">Υπόλοιπο</dt>
+          <dd class="col-6 {% if inv.remaining_balance > 0 %}text-danger{% else %}text-success{% endif %} fw-bold text-end">
+            {{ '{:,.2f}'.format(inv.remaining_balance) }}€
+          </dd>
+        </dl>
+        {% if inv.remaining_balance > 0 %}
+        <div class="mt-3">
+          <div class="d-flex justify-content-between mb-1" style="font-size:12px">
+            <span>Εξοφλημένο</span>
+            <span>{{ '{:.0f}'.format(inv.total_paid / inv.total_amount * 100) if inv.total_amount else 0 }}%</span>
+          </div>
+          <div class="progress" style="height:8px">
+            <div class="progress-bar bg-success" style="width:{{ (inv.total_paid / inv.total_amount * 100)|int if inv.total_amount else 0 }}%"></div>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Payment Modal -->
+<div class="modal fade" id="addPaymentModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Καταχώρηση Πληρωμής</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('invoices.add_payment', id=inv.id) }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label">Ποσό (€) *</label>
+              <input type="number" name="amount" class="form-control" step="0.01"
+                     max="{{ inv.remaining_balance }}" value="{{ inv.remaining_balance }}" required>
+              <small class="text-muted">Υπόλοιπο: {{ '{:,.2f}'.format(inv.remaining_balance) }}€</small>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Ημ/νία Πληρωμής</label>
+              <input type="date" name="payment_date" class="form-control" value="{{ today.strftime('%Y-%m-%d') }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Μέθοδος Πληρωμής</label>
+              <select name="payment_method" class="form-select">
+                <option value="">—</option>
+                <option value="bank_transfer">Τραπεζική Μεταφορά</option>
+                <option value="cash">Μετρητά</option>
+                <option value="check">Επιταγή</option>
+                <option value="card">Κάρτα</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Τραπεζικός Λογαριασμός</label>
+              <select name="bank_account_id" class="form-select">
+                <option value="">—</option>
+                {% for acc in bank_accounts %}
+                <option value="{{ acc.id }}">{{ acc.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Σημειώσεις</label>
+              <input type="text" name="notes" class="form-control" placeholder="Προαιρετικά...">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Ακύρωση</button>
+          <button type="submit" class="btn btn-gold btn-sm">Καταχώρηση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

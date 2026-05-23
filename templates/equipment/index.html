@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Εξοπλισμός — ERP{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Εξοπλισμός</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-tools me-2 text-primary"></i>Εξοπλισμός</h1>
+    <p class="page-subtitle">Μηχανήματα, Εργαλεία, Τεχνολογία Συντήρησης</p>
+  </div>
+  <button class="btn btn-gold" data-bs-toggle="modal" data-bs-target="#newEquipModal">
+    <i class="bi bi-plus-lg me-1"></i>Νέος Εξοπλισμός
+  </button>
+</div>
+
+{% if maintenance_due %}
+<div class="alert alert-warning d-flex align-items-center gap-2 mb-3">
+  <i class="bi bi-wrench-adjustable-circle-fill fs-5"></i>
+  <strong>{{ maintenance_due|length }} εξοπλισμοί χρειάζονται συντήρηση!</strong>
+  {% for e in maintenance_due[:3] %}· {{ e.name }}{% endfor %}
+</div>
+{% endif %}
+
+<!-- Filters -->
+<div class="toolbar">
+  <form method="GET" class="d-flex gap-2 flex-wrap align-items-center w-100">
+    <div class="search-box"><i class="bi bi-search"></i><input name="q" class="form-control form-control-sm" placeholder="Αναζήτηση…" value="{{ q }}"></div>
+    <select name="status" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <option value="">Κατάσταση</option>
+      <option value="available" {% if status=='available' %}selected{% endif %}>Διαθέσιμος</option>
+      <option value="in_use" {% if status=='in_use' %}selected{% endif %}>Σε Χρήση</option>
+      <option value="maintenance" {% if status=='maintenance' %}selected{% endif %}>Συντήρηση</option>
+    </select>
+    <select name="type" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <option value="">Τύπος</option>
+      {% for t in equipment_types %}<option value="{{ t }}" {% if eq_type==t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-search"></i></button>
+    <a href="{{ url_for('equipment.index') }}" class="btn btn-sm btn-outline-secondary">Καθαρισμός</a>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr>
+        <th>Εξοπλισμός</th><th>Τύπος</th><th>Brand / Μοντέλο</th><th>S/N</th>
+        <th>Αξία</th><th>Τοποθεσία</th><th>Τελευτ. Συντ.</th><th>Επόμ. Συντ.</th><th>Κατάσταση</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for eq in equipments %}
+        <tr {% if eq in maintenance_due %}class="table-warning"{% endif %}>
+          <td class="fw-semibold">{{ eq.name }}</td>
+          <td><small class="badge bg-light text-dark border">{{ eq.equipment_type or '—' }}</small></td>
+          <td>{{ eq.brand or '—' }} {{ eq.model or '' }}</td>
+          <td><code style="font-size:11px">{{ eq.serial_number or '—' }}</code></td>
+          <td>{% if eq.current_value %}{{ '{:,.0f}'.format(eq.current_value|float) }}€{% else %}—{% endif %}</td>
+          <td><small>{{ eq.location or '—' }}{% if eq.project %}<br><span class="text-primary">{{ eq.project.code }}</span>{% endif %}</small></td>
+          <td>{{ eq.last_maintenance.strftime('%d/%m/%Y') if eq.last_maintenance else '—' }}</td>
+          <td>
+            {% if eq.next_maintenance %}
+            {% set days = (eq.next_maintenance - today).days if today is defined else 999 %}
+            <span class="{% if days <= 0 %}text-danger fw-bold{% elif days <= 30 %}text-warning fw-semibold{% endif %}">
+              {{ eq.next_maintenance.strftime('%d/%m/%Y') }}
+            </span>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            <span class="badge {% if eq.status=='available' %}status-active{% elif eq.status=='in_use' %}status-submitted{% elif eq.status=='maintenance' %}status-analysis{% else %}bg-secondary{% endif %}">
+              {{ {'available':'Διαθέσιμος','in_use':'Σε Χρήση','maintenance':'Συντήρηση','retired':'Αποσυρθείς'}.get(eq.status, eq.status) }}
+            </span>
+          </td>
+          <td>
+            <div class="d-flex gap-1">
+              <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#maintModal{{ eq.id }}" title="Καταχώρηση Συντήρησης"><i class="bi bi-wrench"></i></button>
+              <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#statusModal{{ eq.id }}" title="Αλλαγή Κατάστασης"><i class="bi bi-arrow-repeat"></i></button>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10"><div class="empty-state"><i class="bi bi-tools d-block"></i><h5>Δεν υπάρχει καταχωρημένος εξοπλισμός</h5></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- New Equipment Modal -->
+<div class="modal fade" id="newEquipModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('equipment.new') }}">
+        <div class="modal-header"><h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Νέος Εξοπλισμός</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body row g-3">
+          <div class="col-md-8"><label class="form-label">Περιγραφή / Όνομα *</label><input type="text" name="name" class="form-control" required placeholder="π.χ. 3D Scanner Artec Leo"></div>
+          <div class="col-md-4">
+            <label class="form-label">Τύπος</label>
+            <select name="equipment_type" class="form-select">
+              <option value="">— Επιλέξτε —</option>
+              {% for t in equipment_types %}<option>{{ t }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4"><label class="form-label">Εταιρεία</label><input type="text" name="brand" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label">Μοντέλο</label><input type="text" name="model" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label">Serial Number</label><input type="text" name="serial_number" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label">Ημ. Αγοράς</label><input type="date" name="purchase_date" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label">Τιμή Αγοράς (€)</label><input type="number" name="purchase_price" class="form-control" step="0.01"></div>
+          <div class="col-md-4"><label class="form-label">Τρέχουσα Αξία (€)</label><input type="number" name="current_value" class="form-control" step="0.01"></div>
+          <div class="col-md-6"><label class="form-label">Τοποθεσία / Αποθήκη</label><input type="text" name="location" class="form-control" placeholder="π.χ. Αποθήκη Αθήνας"></div>
+          <div class="col-md-6">
+            <label class="form-label">Ανατεθείσε σε Έργο</label>
+            <select name="project_id" class="form-select">
+              <option value="">— Κανένα —</option>
+              {% for p in projects %}<option value="{{ p.id }}">{{ p.code }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6"><label class="form-label">Επόμενη Συντήρηση</label><input type="date" name="next_maintenance" class="form-control"></div>
+          <div class="col-md-6"><label class="form-label">Περίοδος Συντήρησης (ημέρες)</label><input type="number" name="maintenance_interval_days" class="form-control" placeholder="π.χ. 365"></div>
+          <div class="col-12"><label class="form-label">Σημειώσεις</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button><button type="submit" class="btn btn-primary">Αποθήκευση</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Per-equipment modals -->
+{% for eq in equipments %}
+<div class="modal fade" id="maintModal{{ eq.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('equipment.add_maintenance', id=eq.id) }}">
+        <div class="modal-header"><h5 class="modal-title">Συντήρηση: {{ eq.name }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body row g-3">
+          <div class="col-md-6"><label class="form-label">Ημερομηνία *</label><input type="date" name="record_date" class="form-control" required></div>
+          <div class="col-md-6"><label class="form-label">Τύπος</label><input type="text" name="maintenance_type" class="form-control" placeholder="π.χ. Βαθμονόμηση"></div>
+          <div class="col-12"><label class="form-label">Περιγραφή</label><textarea name="description" class="form-control" rows="3"></textarea></div>
+          <div class="col-md-6"><label class="form-label">Κόστος (€)</label><input type="number" name="cost" class="form-control" step="0.01"></div>
+          <div class="col-md-6"><label class="form-label">Τεχνικός / Εταιρεία</label><input type="text" name="provider" class="form-control"></div>
+          <div class="col-md-6"><label class="form-label">Επόμενη Συντήρηση</label><input type="date" name="next_due_date" class="form-control"></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button><button type="submit" class="btn btn-primary">Αποθήκευση</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="statusModal{{ eq.id }}" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('equipment.update_status', id=eq.id) }}">
+        <div class="modal-header"><h6 class="modal-title">Κατάσταση: {{ eq.name }}</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <label class="form-label">Κατάσταση</label>
+          <select name="status" class="form-select mb-3">
+            {% for v, l in [('available','Διαθέσιμος'),('in_use','Σε Χρήση'),('maintenance','Συντήρηση'),('retired','Αποσυρθείς')] %}
+            <option value="{{ v }}" {% if eq.status==v %}selected{% endif %}>{{ l }}</option>
+            {% endfor %}
+          </select>
+          <label class="form-label">Έργο (αν σε χρήση)</label>
+          <select name="project_id" class="form-select">
+            <option value="">— Κανένα —</option>
+            {% for p in projects %}<option value="{{ p.id }}" {% if eq.project_id==p.id %}selected{% endif %}>{{ p.code }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="modal-footer"><button type="submit" class="btn btn-primary w-100">Αποθήκευση</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

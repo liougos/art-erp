@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+{% block title %}ART Supplies — Οικονομικά {{ year }}{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item active">ART Supplies</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h2 class="page-title mb-1">
+      <i class="bi bi-shop me-2 text-warning"></i>ART RESTORATION SUPPLIES
+    </h2>
+    <span class="text-muted small">Στοιχεία από Pylon — μηνιαία εισαγωγή</span>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <form method="get" class="d-flex gap-2">
+      <select name="year" class="form-select form-select-sm bg-dark text-white border-secondary" onchange="this.form.submit()">
+        {% for y in years %}
+        <option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <button class="btn btn-gold" data-bs-toggle="modal" data-bs-target="#modalEntry">
+      <i class="bi bi-plus-lg me-1"></i>Εισαγωγή Μήνα
+    </button>
+  </div>
+</div>
+
+<!-- ── Ετήσια Σύνοψη ── -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-success"><i class="bi bi-graph-up-arrow"></i></div>
+      <div class="stat-value">{{ '{:,.0f}'.format(totals.revenue_net) }} €</div>
+      <div class="stat-label">Τζίρος {{ year }} (καθαρός)</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-danger"><i class="bi bi-cart"></i></div>
+      <div class="stat-value">{{ '{:,.0f}'.format(totals.purchases_net) }} €</div>
+      <div class="stat-label">Αγορές {{ year }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon {{ 'text-success' if totals.gross_profit >= 0 else 'text-danger' }}">
+        <i class="bi bi-coin"></i>
+      </div>
+      <div class="stat-value {{ 'text-success' if totals.gross_profit >= 0 else 'text-danger' }}">
+        {{ '{:,.0f}'.format(totals.gross_profit) }} €
+      </div>
+      <div class="stat-label">Μικτό Κέρδος Supplies</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon {{ 'text-warning' if totals.net_vat > 0 else 'text-success' }}">
+        <i class="bi bi-percent"></i>
+      </div>
+      <div class="stat-value {{ 'text-danger' if totals.net_vat > 0 else 'text-success' }}">
+        {{ '{:,.0f}'.format(totals.net_vat) }} €
+      </div>
+      <div class="stat-label">Καθαρός ΦΠΑ (οφ. εφορία)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Μηνιαίος Πίνακας ── -->
+<div class="card card-dark">
+  <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+    <h6 class="mb-0">Μηνιαία Ανάλυση {{ year }}</h6>
+    <span class="text-muted small">Δεδομένα από Pylon / Epsilon Net</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-dark table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Μήνας</th>
+            <th class="text-end">Τζίρος (καθ.) €</th>
+            <th class="text-end">ΦΠΑ Εσόδων €</th>
+            <th class="text-end">Αγορές (καθ.) €</th>
+            <th class="text-end">ΦΠΑ Αγορών €</th>
+            <th class="text-end">Επιστροφές €</th>
+            <th class="text-end fw-bold">Μικτό Κέρδος €</th>
+            <th class="text-end">Καθ. ΦΠΑ €</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set month_names = ['','Ιαν','Φεβ','Μαρ','Απρ','Μαι','Ιουν','Ιουλ','Αυγ','Σεπ','Οκτ','Νοε','Δεκ'] %}
+          {% for m in range(1, 13) %}
+          {% set r = records.get(m) %}
+          <tr class="{% if not r %}opacity-40{% endif %}">
+            <td>
+              <strong>{{ month_names[m] }}</strong>
+              {% if r and r.notes %}
+              <i class="bi bi-chat-left-text ms-1 text-muted" title="{{ r.notes }}" style="font-size:11px"></i>
+              {% endif %}
+            </td>
+            {% if r %}
+            <td class="text-end text-success">{{ '{:,.2f}'.format(r.revenue_net|float) }} €</td>
+            <td class="text-end text-muted small">{{ '{:,.2f}'.format(r.revenue_vat|float) }} €</td>
+            <td class="text-end text-danger">{{ '{:,.2f}'.format(r.purchases_net|float) }} €</td>
+            <td class="text-end text-muted small">{{ '{:,.2f}'.format(r.purchases_vat|float) }} €</td>
+            <td class="text-end text-muted small">{{ '{:,.2f}'.format(r.returns_net|float) }} €</td>
+            <td class="text-end fw-bold {{ 'text-success' if r.gross_profit >= 0 else 'text-danger' }}">
+              {{ '{:,.2f}'.format(r.gross_profit) }} €
+            </td>
+            <td class="text-end small {{ 'text-danger' if r.net_vat > 0 else 'text-success' }}">
+              {{ '{:,.2f}'.format(r.net_vat) }} €
+            </td>
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-primary btn-sm" title="Επεξεργασία"
+                        data-bs-toggle="modal" data-bs-target="#modalEdit{{ r.id }}">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                {% if current_user.role == 'admin' %}
+                <form method="post" action="{{ url_for('supplies.delete', id=r.id) }}"
+                      onsubmit="return confirm('Διαγραφή;')" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-outline-danger btn-sm">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+            {% else %}
+            <td colspan="7" class="text-muted text-center small">—</td>
+            <td class="text-end">
+              <button class="btn btn-outline-secondary btn-sm" title="Εισαγωγή"
+                      data-month="{{ m }}" data-year="{{ year }}"
+                      onclick="openNewEntry({{ m }}, {{ year }})"
+                      data-bs-toggle="modal" data-bs-target="#modalEntry">
+                <i class="bi bi-plus"></i>
+              </button>
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="border-top border-secondary fw-bold">
+          <tr>
+            <td>ΣΥΝΟΛΟ {{ year }}</td>
+            <td class="text-end text-success">{{ '{:,.2f}'.format(totals.revenue_net) }} €</td>
+            <td class="text-end text-muted">{{ '{:,.2f}'.format(totals.revenue_vat) }} €</td>
+            <td class="text-end text-danger">{{ '{:,.2f}'.format(totals.purchases_net) }} €</td>
+            <td class="text-end text-muted">{{ '{:,.2f}'.format(totals.purchases_vat) }} €</td>
+            <td class="text-end text-muted">{{ '{:,.2f}'.format(totals.returns_net) }} €</td>
+            <td class="text-end fs-6 {{ 'text-success' if totals.gross_profit >= 0 else 'text-danger' }}">
+              {{ '{:,.2f}'.format(totals.gross_profit) }} €
+            </td>
+            <td class="text-end {{ 'text-danger' if totals.net_vat > 0 else 'text-success' }}">
+              {{ '{:,.2f}'.format(totals.net_vat) }} €
+            </td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="mt-3 p-3 rounded" style="background:#1a1a1a;border:1px solid #333">
+  <div class="d-flex gap-2 align-items-start">
+    <i class="bi bi-info-circle text-warning mt-1"></i>
+    <div class="small text-muted">
+      <strong class="text-white">Πώς γίνεται η εισαγωγή:</strong>
+      Στο Pylon → <em>Αναφορές → Κινήσεις Ισοζύγιο</em> ή <em>ΦΠΑ Περιόδου</em> → σημειώστε τα ποσά
+      καθαρής αξίας και ΦΠΑ για έσοδα/αγορές → εισάγετε εδώ μία φορά τον μήνα.
+    </div>
+  </div>
+</div>
+
+
+<!-- ── MODALS ── -->
+
+<!-- New Entry Modal -->
+<div class="modal fade" id="modalEntry" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-2 text-warning"></i>Εισαγωγή Στοιχείων Pylon</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('supplies.save') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label">Μήνας</label>
+              <select name="month" id="entryMonth" class="form-select bg-dark text-white border-secondary">
+                {% for i in range(1,13) %}
+                <option value="{{ i }}" {% if i == today.month %}selected{% endif %}>
+                  {{ ['','Ιανουάριος','Φεβρουάριος','Μάρτιος','Απρίλιος','Μάιος','Ιούνιος',
+                      'Ιούλιος','Αύγουστος','Σεπτέμβριος','Οκτώβριος','Νοέμβριος','Δεκέμβριος'][i] }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Έτος</label>
+              <select name="year" id="entryYear" class="form-select bg-dark text-white border-secondary">
+                {% for y in range(today.year-2, today.year+1) %}
+                <option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <hr class="border-secondary my-3">
+          <p class="text-muted small mb-3">
+            <i class="bi bi-arrow-up-circle text-success me-1"></i><strong>Έσοδα</strong> — από Pylon: ΦΠΑ Περιόδου → Εκροές
+          </p>
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label">Τζίρος Καθαρός €</label>
+              <input type="number" step="0.01" name="revenue_net" class="form-control bg-dark text-white border-secondary" value="0">
+            </div>
+            <div class="col-6">
+              <label class="form-label">ΦΠΑ Εσόδων €</label>
+              <input type="number" step="0.01" name="revenue_vat" class="form-control bg-dark text-white border-secondary" value="0">
+            </div>
+          </div>
+
+          <p class="text-muted small mb-3">
+            <i class="bi bi-arrow-down-circle text-danger me-1"></i><strong>Αγορές</strong> — από Pylon: ΦΠΑ Περιόδου → Εισροές
+          </p>
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label">Αγορές Καθαρές €</label>
+              <input type="number" step="0.01" name="purchases_net" class="form-control bg-dark text-white border-secondary" value="0">
+            </div>
+            <div class="col-6">
+              <label class="form-label">ΦΠΑ Αγορών €</label>
+              <input type="number" step="0.01" name="purchases_vat" class="form-control bg-dark text-white border-secondary" value="0">
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label">Επιστροφές €</label>
+              <input type="number" step="0.01" name="returns_net" class="form-control bg-dark text-white border-secondary" value="0">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Σημείωση</label>
+              <input type="text" name="notes" class="form-control bg-dark text-white border-secondary" placeholder="π.χ. εκτίμηση">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-gold">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modals -->
+{% for m, r in records.items() %}
+<div class="modal fade" id="modalEdit{{ r.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Επεξεργασία: {{ r.month_label }} {{ r.year }}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('supplies.save') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="month" value="{{ r.month }}">
+        <input type="hidden" name="year" value="{{ r.year }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label">Τζίρος Καθαρός €</label>
+              <input type="number" step="0.01" name="revenue_net" class="form-control bg-dark text-white border-secondary" value="{{ r.revenue_net }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label">ΦΠΑ Εσόδων €</label>
+              <input type="number" step="0.01" name="revenue_vat" class="form-control bg-dark text-white border-secondary" value="{{ r.revenue_vat }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Αγορές Καθαρές €</label>
+              <input type="number" step="0.01" name="purchases_net" class="form-control bg-dark text-white border-secondary" value="{{ r.purchases_net }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label">ΦΠΑ Αγορών €</label>
+              <input type="number" step="0.01" name="purchases_vat" class="form-control bg-dark text-white border-secondary" value="{{ r.purchases_vat }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Επιστροφές €</label>
+              <input type="number" step="0.01" name="returns_net" class="form-control bg-dark text-white border-secondary" value="{{ r.returns_net }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Σημείωση</label>
+              <input type="text" name="notes" class="form-control bg-dark text-white border-secondary" value="{{ r.notes or '' }}">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openNewEntry(month, year) {
+  document.getElementById('entryMonth').value = month;
+  document.getElementById('entryYear').value  = year;
+}
+</script>
+{% endblock %}

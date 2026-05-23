@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+{% block title %}ΜΑΠ Ασφαλείας — ART ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item active">ΜΑΠ Ασφαλείας</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h2 class="page-title mb-0"><i class="bi bi-shield-exclamation me-2 text-warning"></i>ΜΑΠ Ασφαλείας</h2>
+  {% if current_user.role in ('admin','manager') %}
+  <button class="btn btn-gold" data-bs-toggle="modal" data-bs-target="#modalNew">
+    <i class="bi bi-plus-lg me-1"></i>Νέο ΜΑΠ
+  </button>
+  {% endif %}
+</div>
+
+<!-- Alert cards -->
+{% if expired %}
+<div class="alert alert-danger d-flex align-items-center mb-3">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>
+  <strong>{{ expired|length }} ΜΑΠ έχουν λήξει!</strong>
+</div>
+{% endif %}
+{% if expiring_soon %}
+<div class="alert alert-warning d-flex align-items-center mb-3">
+  <i class="bi bi-exclamation-circle me-2"></i>
+  <strong>{{ expiring_soon|length }} ΜΑΠ λήγουν εντός 30 ημερών.</strong>
+</div>
+{% endif %}
+
+<!-- Stats -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-warning"><i class="bi bi-shield"></i></div>
+      <div class="stat-value">{{ items|length }}</div>
+      <div class="stat-label">Σύνολο ΜΑΠ</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-primary"><i class="bi bi-person-check"></i></div>
+      <div class="stat-value">{{ assigned|length }}</div>
+      <div class="stat-label">Ανατεθειμένα</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-danger"><i class="bi bi-calendar-x"></i></div>
+      <div class="stat-value">{{ expired|length }}</div>
+      <div class="stat-label">Ληγμένα</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-warning"><i class="bi bi-clock"></i></div>
+      <div class="stat-value">{{ expiring_soon|length }}</div>
+      <div class="stat-label">Λήγουν Σύντομα</div>
+    </div>
+  </div>
+</div>
+
+<!-- Category filter -->
+<div class="card card-dark mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="d-flex gap-2 flex-wrap align-items-center">
+      <a href="{{ url_for('safety.index') }}" class="btn btn-sm {% if not cat %}btn-gold{% else %}btn-outline-secondary{% endif %}">Όλα</a>
+      {% for k,v in categories %}
+      <a href="{{ url_for('safety.index', cat=k) }}" class="btn btn-sm {% if cat==k %}btn-gold{% else %}btn-outline-secondary{% endif %}">{{ v }}</a>
+      {% endfor %}
+    </form>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="card card-dark">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-dark table-hover mb-0">
+        <thead>
+          <tr>
+            <th>ΜΑΠ</th>
+            <th>Κατηγορία</th>
+            <th>S/N</th>
+            <th>Κατάσταση</th>
+            <th>Λήξη</th>
+            <th>Ανατεθειμένο σε</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          {% set asgn = item.current_assignment %}
+          <tr class="{% if item.days_to_expiry is not none and item.days_to_expiry < 0 %}table-danger{% elif item.days_to_expiry is not none and item.days_to_expiry <= 30 %}table-warning{% endif %}">
+            <td><strong>{{ item.name }}</strong></td>
+            <td><span class="badge bg-secondary">{{ item.category_label }}</span></td>
+            <td class="text-muted small">{{ item.serial_number or '—' }}</td>
+            <td>
+              {% set cond_colors = {'good':'success','fair':'warning','damaged':'danger','retired':'secondary'} %}
+              {% set cond_labels = {'good':'Καλή','fair':'Μέτρια','damaged':'Κατεστραμμένο','retired':'Αποσυρμένο'} %}
+              <span class="badge bg-{{ cond_colors.get(item.condition,'secondary') }}">
+                {{ cond_labels.get(item.condition, item.condition) }}
+              </span>
+            </td>
+            <td>
+              {% if item.expiry_date %}
+                {{ item.expiry_date.strftime('%d/%m/%Y') }}
+                {% if item.days_to_expiry is not none %}
+                  {% if item.days_to_expiry < 0 %}
+                    <span class="badge bg-danger ms-1">Ληγμένο</span>
+                  {% elif item.days_to_expiry <= 30 %}
+                    <span class="badge bg-warning text-dark ms-1">{{ item.days_to_expiry }}η</span>
+                  {% endif %}
+                {% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if asgn %}
+                <strong>{{ asgn.employee.full_name if asgn.employee else '—' }}</strong>
+                <div class="text-muted small">από {{ asgn.assigned_date.strftime('%d/%m/%Y') if asgn.assigned_date else '' }}</div>
+              {% else %}
+                <span class="text-muted">Διαθέσιμο</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                {% if current_user.role in ('admin','manager') %}
+                  {% if not item.is_assigned %}
+                  <button class="btn btn-outline-primary" title="Ανάθεση"
+                          data-bs-toggle="modal" data-bs-target="#modalAssign{{ item.id }}">
+                    <i class="bi bi-person-plus"></i>
+                  </button>
+                  {% else %}
+                  <button class="btn btn-outline-warning" title="Επιστροφή"
+                          data-bs-toggle="modal" data-bs-target="#modalReturn{{ item.id }}">
+                    <i class="bi bi-person-dash"></i>
+                  </button>
+                  {% endif %}
+                  <button class="btn btn-outline-secondary" title="Επεξεργασία"
+                          data-bs-toggle="modal" data-bs-target="#modalEdit{{ item.id }}">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="text-center text-muted py-4">Δεν βρέθηκαν ΜΑΠ.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── MODALS ── -->
+
+<!-- New PPE -->
+{% if current_user.role in ('admin','manager') %}
+<div class="modal fade" id="modalNew" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-2 text-warning"></i>Νέο ΜΑΠ</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('safety.new') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-8">
+              <label class="form-label">Όνομα ΜΑΠ *</label>
+              <input type="text" name="name" class="form-control bg-dark text-white border-secondary" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Κατηγορία</label>
+              <select name="category" class="form-select bg-dark text-white border-secondary">
+                {% for k,v in categories %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Σειριακός Αριθμός</label>
+              <input type="text" name="serial_number" class="form-control bg-dark text-white border-secondary">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Ημ. Αγοράς</label>
+              <input type="date" name="purchase_date" class="form-control bg-dark text-white border-secondary">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Ημ. Λήξης</label>
+              <input type="date" name="expiry_date" class="form-control bg-dark text-white border-secondary">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Κατάσταση</label>
+              <select name="condition" class="form-select bg-dark text-white border-secondary">
+                <option value="good">Καλή</option>
+                <option value="fair">Μέτρια</option>
+                <option value="damaged">Κατεστραμμένο</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Σημειώσεις</label>
+              <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="2"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-gold">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% for item in items %}
+{% set asgn = item.current_assignment %}
+<!-- Assign Modal -->
+{% if current_user.role in ('admin','manager') and not item.is_assigned %}
+<div class="modal fade" id="modalAssign{{ item.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-person-plus me-2 text-primary"></i>Ανάθεση: {{ item.name }}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('safety.assign', id=item.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Εργαζόμενος *</label>
+            <select name="employee_id" class="form-select bg-dark text-white border-secondary" required>
+              {% for emp in employees %}
+              <option value="{{ emp.id }}">{{ emp.full_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Ημερομηνία Ανάθεσης</label>
+            <input type="date" name="assigned_date" class="form-control bg-dark text-white border-secondary" value="{{ today }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Σημειώσεις</label>
+            <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-primary">Ανάθεση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Return Modal -->
+{% if current_user.role in ('admin','manager') and item.is_assigned %}
+<div class="modal fade" id="modalReturn{{ item.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-person-dash me-2 text-warning"></i>Επιστροφή: {{ item.name }}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('safety.return_equipment', id=item.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          {% if asgn %}
+          <p>Επιστροφή από: <strong>{{ asgn.employee.full_name if asgn.employee else '—' }}</strong></p>
+          {% endif %}
+          <div class="mb-3">
+            <label class="form-label">Κατάσταση μετά επιστροφή</label>
+            <select name="condition" class="form-select bg-dark text-white border-secondary">
+              <option value="good">Καλή</option>
+              <option value="fair">Μέτρια</option>
+              <option value="damaged">Κατεστραμμένο</option>
+              <option value="retired">Αποσυρμένο</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-warning text-dark">Επιστροφή</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Edit Modal -->
+{% if current_user.role in ('admin','manager') %}
+<div class="modal fade" id="modalEdit{{ item.id }}" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Επεξεργασία: {{ item.name }}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('safety.edit', id=item.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-8">
+              <label class="form-label">Όνομα *</label>
+              <input type="text" name="name" class="form-control bg-dark text-white border-secondary" value="{{ item.name }}" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Κατηγορία</label>
+              <select name="category" class="form-select bg-dark text-white border-secondary">
+                {% for k,v in categories %}
+                <option value="{{ k }}" {% if item.category==k %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Σειριακός Αριθμός</label>
+              <input type="text" name="serial_number" class="form-control bg-dark text-white border-secondary" value="{{ item.serial_number or '' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Ημ. Αγοράς</label>
+              <input type="date" name="purchase_date" class="form-control bg-dark text-white border-secondary" value="{{ item.purchase_date or '' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Ημ. Λήξης</label>
+              <input type="date" name="expiry_date" class="form-control bg-dark text-white border-secondary" value="{{ item.expiry_date or '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Κατάσταση</label>
+              <select name="condition" class="form-select bg-dark text-white border-secondary">
+                <option value="good" {% if item.condition=='good' %}selected{% endif %}>Καλή</option>
+                <option value="fair" {% if item.condition=='fair' %}selected{% endif %}>Μέτρια</option>
+                <option value="damaged" {% if item.condition=='damaged' %}selected{% endif %}>Κατεστραμμένο</option>
+                <option value="retired" {% if item.condition=='retired' %}selected{% endif %}>Αποσυρμένο</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Σημειώσεις</label>
+              <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="2">{{ item.notes or '' }}</textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endblock %}

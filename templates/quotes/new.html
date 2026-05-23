@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}Νέα Προσφορά — ART ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('quotes.index') }}">Προσφορές</a></li>
+<li class="breadcrumb-item active">Νέα Προσφορά</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h2 class="page-title mb-0"><i class="bi bi-file-earmark-plus me-2 text-warning"></i>Νέα Προσφορά</h2>
+  <a href="{{ url_for('quotes.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Πίσω
+  </a>
+</div>
+
+<form method="post" action="{{ url_for('quotes.new') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="row g-4">
+    <!-- Left column: header info -->
+    <div class="col-lg-4">
+      <div class="card card-dark mb-3">
+        <div class="card-header border-secondary"><h6 class="mb-0">Γενικά Στοιχεία</h6></div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label">Τίτλος Προσφοράς *</label>
+            <input type="text" name="title" class="form-control bg-dark text-white border-secondary" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Συνδεδεμένος Διαγωνισμός</label>
+            <select name="tender_id" class="form-select bg-dark text-white border-secondary">
+              <option value="">— Κανένας —</option>
+              {% for t in tenders %}
+              <option value="{{ t.id }}">{{ t.title[:50] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">Ημ. Έκδοσης</label>
+              <input type="date" name="issue_date" class="form-control bg-dark text-white border-secondary" value="{{ today }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Ισχύς έως</label>
+              <input type="date" name="valid_until" class="form-control bg-dark text-white border-secondary">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-dark mb-3">
+        <div class="card-header border-secondary"><h6 class="mb-0">Στοιχεία Πελάτη</h6></div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label">Επωνυμία / Όνομα</label>
+            <input type="text" name="client_name" class="form-control bg-dark text-white border-secondary">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">ΑΦΜ</label>
+            <input type="text" name="client_afm" class="form-control bg-dark text-white border-secondary">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" name="client_email" class="form-control bg-dark text-white border-secondary">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Τηλέφωνο</label>
+            <input type="text" name="client_phone" class="form-control bg-dark text-white border-secondary">
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-dark">
+        <div class="card-header border-secondary"><h6 class="mb-0">Όροι &amp; Σημειώσεις</h6></div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label">Όροι Προσφοράς</label>
+            <textarea name="terms" class="form-control bg-dark text-white border-secondary" rows="3"
+                      placeholder="π.χ. Πληρωμή εντός 30 ημερών..."></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Σημειώσεις</label>
+            <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="3"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right column: line items -->
+    <div class="col-lg-8">
+      <div class="card card-dark">
+        <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+          <h6 class="mb-0">Γραμμές Προσφοράς</h6>
+          <button type="button" class="btn btn-sm btn-outline-warning" id="btnAddLine">
+            <i class="bi bi-plus-lg me-1"></i>Προσθήκη Γραμμής
+          </button>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-dark mb-0" id="itemsTable">
+              <thead>
+                <tr>
+                  <th style="min-width:200px">Περιγραφή</th>
+                  <th style="width:70px">Μον.</th>
+                  <th style="width:80px">Ποσ.</th>
+                  <th style="width:100px">Τιμή €</th>
+                  <th style="width:70px">ΦΠΑ%</th>
+                  <th style="width:100px" class="text-end">Σύνολο €</th>
+                  <th style="width:40px"></th>
+                </tr>
+              </thead>
+              <tbody id="itemsBody">
+                <tr class="item-row">
+                  <td><input type="text" name="item_description[]" class="form-control form-control-sm bg-dark text-white border-secondary" required></td>
+                  <td><input type="text" name="item_unit[]" class="form-control form-control-sm bg-dark text-white border-secondary" value="τεμ."></td>
+                  <td><input type="number" step="0.01" name="item_quantity[]" class="form-control form-control-sm bg-dark text-white border-secondary item-qty" value="1"></td>
+                  <td><input type="number" step="0.01" name="item_unit_price[]" class="form-control form-control-sm bg-dark text-white border-secondary item-price" value="0"></td>
+                  <td><input type="number" step="0.01" name="item_vat_rate[]" class="form-control form-control-sm bg-dark text-white border-secondary item-vat" value="24"></td>
+                  <td class="text-end align-middle item-total text-warning fw-bold">0,00 €</td>
+                  <td class="align-middle"><button type="button" class="btn btn-sm btn-link text-danger p-0 btn-remove-line"><i class="bi bi-x-lg"></i></button></td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr class="border-top border-secondary">
+                  <td colspan="5" class="text-end text-muted small">Καθαρή Αξία:</td>
+                  <td class="text-end text-white" id="subtotal">0,00 €</td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td colspan="5" class="text-end text-muted small">ΦΠΑ:</td>
+                  <td class="text-end text-white" id="vat_total">0,00 €</td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td colspan="5" class="text-end fw-bold">Γενικό Σύνολο:</td>
+                  <td class="text-end fw-bold text-warning fs-5" id="grand_total">0,00 €</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end gap-2 mt-3">
+        <a href="{{ url_for('quotes.index') }}" class="btn btn-outline-secondary">Άκυρο</a>
+        <button type="submit" class="btn btn-gold">
+          <i class="bi bi-floppy me-1"></i>Αποθήκευση Προσφοράς
+        </button>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const rowTemplate = `
+  <tr class="item-row">
+    <td><input type="text" name="item_description[]" class="form-control form-control-sm bg-dark text-white border-secondary" required></td>
+    <td><input type="text" name="item_unit[]" class="form-control form-control-sm bg-dark text-white border-secondary" value="τεμ."></td>
+    <td><input type="number" step="0.01" name="item_quantity[]" class="form-control form-control-sm bg-dark text-white border-secondary item-qty" value="1"></td>
+    <td><input type="number" step="0.01" name="item_unit_price[]" class="form-control form-control-sm bg-dark text-white border-secondary item-price" value="0"></td>
+    <td><input type="number" step="0.01" name="item_vat_rate[]" class="form-control form-control-sm bg-dark text-white border-secondary item-vat" value="24"></td>
+    <td class="text-end align-middle item-total text-warning fw-bold">0,00 €</td>
+    <td class="align-middle"><button type="button" class="btn btn-sm btn-link text-danger p-0 btn-remove-line"><i class="bi bi-x-lg"></i></button></td>
+  </tr>`;
+
+document.getElementById('btnAddLine').addEventListener('click', () => {
+  document.getElementById('itemsBody').insertAdjacentHTML('beforeend', rowTemplate);
+  recalc();
+});
+
+document.getElementById('itemsBody').addEventListener('click', e => {
+  if (e.target.closest('.btn-remove-line')) {
+    const rows = document.querySelectorAll('#itemsBody .item-row');
+    if (rows.length > 1) { e.target.closest('tr').remove(); recalc(); }
+  }
+});
+
+document.getElementById('itemsBody').addEventListener('input', recalc);
+
+function fmt(n) { return n.toLocaleString('el-GR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €'; }
+
+function recalc() {
+  let sub = 0, vat = 0;
+  document.querySelectorAll('#itemsBody .item-row').forEach(row => {
+    const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+    const price = parseFloat(row.querySelector('.item-price').value) || 0;
+    const vatRate = parseFloat(row.querySelector('.item-vat').value) || 0;
+    const net = qty * price;
+    const vatAmt = net * vatRate / 100;
+    sub += net; vat += vatAmt;
+    row.querySelector('.item-total').textContent = fmt(net + vatAmt);
+  });
+  document.getElementById('subtotal').textContent = fmt(sub);
+  document.getElementById('vat_total').textContent = fmt(vat);
+  document.getElementById('grand_total').textContent = fmt(sub + vat);
+}
+
+recalc();
+</script>
+{% endblock %}

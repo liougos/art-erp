@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block title %}Ταμειακά Διαθέσιμα — ERP{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Ταμειακά Διαθέσιμα</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-bank2 me-2 text-primary"></i>Ταμειακά Διαθέσιμα</h1>
+    <p class="page-subtitle">Παρακολούθηση τραπεζικών λογαριασμών</p>
+  </div>
+  <button class="btn btn-gold" data-bs-toggle="modal" data-bs-target="#newAccountModal">
+    <i class="bi bi-plus-lg me-1"></i>Νέος Λογαριασμός
+  </button>
+</div>
+
+<!-- KPIs -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon blue"><i class="bi bi-bank2"></i></div>
+      <div><div class="kpi-value">{{ accounts|length }}</div><div class="kpi-label">Λογαριασμοί</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon green"><i class="bi bi-calculator"></i></div>
+      <div>
+        <div class="kpi-value" style="font-size:18px">{{ '{:,.2f}'.format(total_expected) }}€</div>
+        <div class="kpi-label">Αναμενόμενο Σύνολο</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon {% if total_actual >= total_expected %}green{% else %}orange{% endif %}"><i class="bi bi-cash-stack"></i></div>
+      <div>
+        <div class="kpi-value" style="font-size:18px">{{ '{:,.2f}'.format(total_actual) if total_actual else '—' }}€</div>
+        <div class="kpi-label">Πραγματικό Σύνολο</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    {% set diff = total_actual - total_expected %}
+    <div class="kpi-card">
+      <div class="kpi-icon {% if diff == 0 %}green{% elif diff > 0 %}blue{% else %}red{% endif %}"><i class="bi bi-arrow-left-right"></i></div>
+      <div>
+        <div class="kpi-value {% if diff > 0 %}text-success{% elif diff < 0 %}text-danger{% endif %}" style="font-size:18px">
+          {% if diff > 0 %}+{% endif %}{{ '{:,.2f}'.format(diff) }}€
+        </div>
+        <div class="kpi-label">Διαφορά</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Accounts -->
+{% for acc in accounts %}
+<div class="card mb-3">
+  <div class="card-header justify-content-between">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-bank2 text-primary"></i>
+      <strong>{{ acc.name }}</strong>
+      {% if acc.bank_name %}<span class="text-muted small">· {{ acc.bank_name }}</span>{% endif %}
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#updateModal{{ acc.id }}">
+        <i class="bi bi-pencil-square me-1"></i>Ενημέρωση Υπολοίπου
+      </button>
+      <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editModal{{ acc.id }}">
+        <i class="bi bi-gear"></i>
+      </button>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="d-flex flex-column">
+          <small class="text-muted mb-1">IBAN</small>
+          <code style="font-size:12px">{{ acc.iban or '—' }}</code>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="d-flex flex-column">
+          <small class="text-muted mb-1">Αρχικό Υπόλοιπο</small>
+          <span class="fw-semibold">{{ '{:,.2f}'.format(acc.opening_balance|float) }}€</span>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="d-flex flex-column">
+          <small class="text-muted mb-1">Αναμενόμενο</small>
+          <span class="fw-semibold text-primary">{{ '{:,.2f}'.format(acc.calculated_balance) }}€</span>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="d-flex flex-column">
+          <small class="text-muted mb-1">Πραγματικό
+            {% if acc.last_actual_date %}<span class="ms-1">({{ acc.last_actual_date.strftime('%d/%m') }})</span>{% endif %}
+          </small>
+          <span class="fw-semibold {% if acc.last_actual_balance is not none %}text-success{% else %}text-muted{% endif %}">
+            {{ '{:,.2f}'.format(acc.last_actual_balance|float) if acc.last_actual_balance is not none else '—' }}€
+          </span>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="d-flex flex-column">
+          <small class="text-muted mb-1">Διαφορά</small>
+          {% if acc.discrepancy is not none %}
+            {% set d = acc.discrepancy %}
+            <span class="fw-semibold {% if d == 0 %}text-success{% elif d > 0 %}text-info{% else %}text-danger{% endif %}">
+              {% if d > 0 %}+{% endif %}{{ '{:,.2f}'.format(d) }}€
+              {% if d > 0 %}<i class="bi bi-arrow-up-circle ms-1" title="Αδήλωτα έσοδα"></i>
+              {% elif d < 0 %}<i class="bi bi-arrow-down-circle ms-1" title="Αδήλωτα έξοδα"></i>
+              {% else %}<i class="bi bi-check-circle ms-1"></i>{% endif %}
+            </span>
+            {% if d != 0 %}
+            <small class="text-muted" style="font-size:11px">
+              {% if d > 0 %}Εισπράξατε κάτι αδήλωτο{% else %}Πληρώσατε κάτι αδήλωτο{% endif %}
+            </small>
+            {% endif %}
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% if acc.notes %}
+    <div class="mt-2"><small class="text-muted"><i class="bi bi-sticky me-1"></i>{{ acc.notes }}</small></div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Update Balance Modal -->
+<div class="modal fade" id="updateModal{{ acc.id }}" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Ενημέρωση Υπολοίπου — {{ acc.name }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('cash.update_balance', id=acc.id) }}">
+        <div class="modal-body">
+          <label class="form-label fw-semibold">Πραγματικό Υπόλοιπο Σήμερα (€)</label>
+          <input type="number" name="actual_balance" class="form-control" step="0.01"
+                 value="{{ acc.last_actual_balance if acc.last_actual_balance is not none else '' }}" required>
+          <small class="text-muted">Εισάγετε το υπόλοιπο που βλέπετε στην τράπεζα</small>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Ακύρωση</button>
+          <button type="submit" class="btn btn-primary btn-sm">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Account Modal -->
+<div class="modal fade" id="editModal{{ acc.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Επεξεργασία — {{ acc.name }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('cash.edit', id=acc.id) }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Όνομα Λογαριασμού *</label>
+              <input type="text" name="name" class="form-control" value="{{ acc.name }}" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Τράπεζα</label>
+              <input type="text" name="bank_name" class="form-control" value="{{ acc.bank_name or '' }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Αρχικό Υπόλοιπο (€)</label>
+              <input type="number" name="opening_balance" class="form-control" step="0.01" value="{{ acc.opening_balance }}">
+            </div>
+            <div class="col-12">
+              <label class="form-label">IBAN</label>
+              <input type="text" name="iban" class="form-control" value="{{ acc.iban or '' }}">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Σημειώσεις</label>
+              <textarea name="notes" class="form-control" rows="2">{{ acc.notes or '' }}</textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <form method="POST" action="{{ url_for('cash.toggle', id=acc.id) }}" class="me-auto">
+            <button type="submit" class="btn btn-sm btn-outline-{% if acc.is_active %}danger{% else %}success{% endif %}">
+              {% if acc.is_active %}Απενεργοποίηση{% else %}Ενεργοποίηση{% endif %}
+            </button>
+          </form>
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Ακύρωση</button>
+          <button type="submit" class="btn btn-primary btn-sm">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-bank2 d-block fs-1 opacity-25 mb-3"></i>
+    <p class="mb-3">Δεν έχετε καταχωρήσει τραπεζικούς λογαριασμούς ακόμα.</p>
+    <button class="btn btn-gold" data-bs-toggle="modal" data-bs-target="#newAccountModal">
+      <i class="bi bi-plus-lg me-1"></i>Προσθήκη Πρώτου Λογαριασμού
+    </button>
+  </div>
+</div>
+{% endfor %}
+
+<!-- New Account Modal -->
+<div class="modal fade" id="newAccountModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Νέος Τραπεζικός Λογαριασμός</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('cash.new') }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Όνομα Λογαριασμού *</label>
+              <input type="text" name="name" class="form-control" placeholder="π.χ. Κύριος Λογαριασμός" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Τράπεζα</label>
+              <input type="text" name="bank_name" class="form-control" placeholder="π.χ. Eurobank">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Αρχικό Υπόλοιπο (€)</label>
+              <input type="number" name="opening_balance" class="form-control" step="0.01" value="0">
+            </div>
+            <div class="col-12">
+              <label class="form-label">IBAN</label>
+              <input type="text" name="iban" class="form-control" placeholder="GR...">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Αριθμός Λογαριασμού</label>
+              <input type="text" name="account_number" class="form-control">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Ημ/νια Έναρξης</label>
+              <input type="date" name="opening_date" class="form-control" value="{{ today.strftime('%Y-%m-%d') }}">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Σημειώσεις</label>
+              <textarea name="notes" class="form-control" rows="2"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Ακύρωση</button>
+          <button type="submit" class="btn btn-gold btn-sm">Προσθήκη</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

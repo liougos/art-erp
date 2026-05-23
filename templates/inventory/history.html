@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Ιστορικό: {{ item.name }} — ART ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('inventory.index') }}">Αποθήκη</a></li>
+<li class="breadcrumb-item active">{{ item.name }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h2 class="page-title mb-0">
+    <i class="bi bi-clock-history me-2 text-warning"></i>Ιστορικό: {{ item.name }}
+  </h2>
+  <a href="{{ url_for('inventory.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Πίσω
+  </a>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-label">Τρέχον Απόθεμα</div>
+      <div class="stat-value text-warning">{{ item.current_stock }} {{ item.unit }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-label">Τιμή/Μονάδα</div>
+      <div class="stat-value">{{ '%.2f'|format(item.unit_price|float) }} €</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-label">Αξία Αποθέματος</div>
+      <div class="stat-value text-success">{{ '%.2f'|format(item.stock_value) }} €</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-label">Κατηγορία</div>
+      <div class="stat-value" style="font-size:1rem">{{ item.category or '—' }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card card-dark">
+  <div class="card-header border-secondary">
+    <h6 class="mb-0">Κινήσεις Αποθέματος</h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-dark table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Ημερομηνία</th>
+            <th>Τύπος</th>
+            <th class="text-end">Ποσότητα</th>
+            <th>Έργο</th>
+            <th>Χρήστης</th>
+            <th class="text-end">Κόστος €</th>
+            <th>Σημειώσεις</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in usages %}
+          <tr>
+            <td>{{ u.used_at.strftime('%d/%m/%Y') if u.used_at else '—' }}</td>
+            <td><span class="badge bg-warning text-dark">Χρήση</span></td>
+            <td class="text-end text-danger">-{{ u.quantity }} {{ item.unit }}</td>
+            <td>
+              {% if u.project %}
+              <a href="{{ url_for('projects.detail', id=u.project.id) }}" class="text-warning text-decoration-none">
+                [{{ u.project.code }}] {{ u.project.title[:30] }}
+              </a>
+              {% else %}—{% endif %}
+            </td>
+            <td class="text-muted small">{{ u.used_by.full_name if u.used_by else '—' }}</td>
+            <td class="text-end">{{ '%.2f'|format(u.line_cost) }} €</td>
+            <td class="text-muted small">{{ u.notes or '' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="text-center text-muted py-4">Δεν υπάρχουν κινήσεις.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

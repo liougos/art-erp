@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}Επεξεργασία Τιμολογίου — ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('invoices.index') }}">Τιμολόγια</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('invoices.detail', id=inv.id) }}">{{ inv.invoice_number or '#'+inv.id|string }}</a></li>
+<li class="breadcrumb-item active">Επεξεργασία</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-pencil-square me-2 text-primary"></i>Επεξεργασία Τιμολογίου</h1>
+    <p class="page-subtitle">{{ inv.invoice_number or '#'+inv.id|string }}</p>
+  </div>
+  <a href="{{ url_for('invoices.detail', id=inv.id) }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Πίσω
+  </a>
+</div>
+
+<form method="POST" action="{{ url_for('invoices.edit', id=inv.id) }}">
+  <div class="row g-3">
+    <div class="col-lg-8">
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-receipt text-primary"></i> Στοιχεία Τιμολογίου</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label">Αριθμός Τιμολογίου</label>
+              <input type="text" name="invoice_number" class="form-control" value="{{ inv.invoice_number or '' }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Τύπος</label>
+              <select name="invoice_type" class="form-select">
+                <option value="income" {% if inv.invoice_type=='income' %}selected{% endif %}>Έσοδο (Εισερχόμενο)</option>
+                <option value="expense" {% if inv.invoice_type=='expense' %}selected{% endif %}>Έξοδο (Εξερχόμενο)</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Εκδότης / Προμηθευτής</label>
+              <input type="text" name="issuer" class="form-control" value="{{ inv.issuer or '' }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label">ΑΦΜ Εκδότη</label>
+              <input type="text" name="issuer_afm" class="form-control" value="{{ inv.issuer_afm or '' }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Ημ/νία Τιμολογίου</label>
+              <input type="date" name="invoice_date" class="form-control"
+                     value="{{ inv.invoice_date.strftime('%Y-%m-%d') if inv.invoice_date else '' }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Ημ/νία Λήξης Πληρωμής</label>
+              <input type="date" name="due_date" class="form-control"
+                     value="{{ inv.due_date.strftime('%Y-%m-%d') if inv.due_date else '' }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Κατηγορία</label>
+              <input type="text" name="category" class="form-control" value="{{ inv.category or '' }}"
+                     list="cat_list" placeholder="π.χ. Υλικά, Υπεργολαβία...">
+              <datalist id="cat_list">
+                {% for c in ['Υλικά','Υπεργολαβία','Εξοπλισμός','Μεταφορές','Μισθοί','Ασφαλίσεις','Δ.Ε.Η.','Ύδρευση','Τηλεπικοινωνίες','Γραφείο','Άλλο'] %}
+                <option value="{{ c }}">{% endfor %}
+              </datalist>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Έργο</label>
+              <select name="project_id" class="form-select">
+                <option value="">— Χωρίς έργο —</option>
+                {% for p in projects %}
+                <option value="{{ p.id }}" {% if inv.project_id == p.id %}selected{% endif %}>{{ p.code }} — {{ p.title[:40] }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Περιγραφή</label>
+              <textarea name="description" class="form-control" rows="2">{{ inv.description or '' }}</textarea>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Σημειώσεις</label>
+              <textarea name="notes" class="form-control" rows="2">{{ inv.notes or '' }}</textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-currency-euro text-primary"></i> Ποσά</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label">Καθαρή Αξία (€) *</label>
+            <input type="number" name="amount_net" id="net_amount" class="form-control" step="0.01"
+                   value="{{ inv.amount_net or '' }}" oninput="recalc()" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Συντελεστής ΦΠΑ (%)</label>
+            <select name="vat_rate" id="vat_rate" class="form-select" onchange="recalc()">
+              {% for r in [0, 6, 13, 24] %}
+              <option value="{{ r }}" {% if (inv.vat_rate or 24)|int == r %}selected{% endif %}>{{ r }}%</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">ΦΠΑ (€)</label>
+            <input type="number" name="vat_amount" id="vat_amount" class="form-control" step="0.01"
+                   value="{{ inv.vat_amount or '' }}" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Σύνολο (€)</label>
+            <input type="number" name="total_amount" id="total_amount" class="form-control fw-bold" step="0.01"
+                   value="{{ inv.total_amount or '' }}" readonly>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-cash-coin text-primary"></i> Κατάσταση Πληρωμής</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label">Κατάσταση</label>
+            <select name="payment_status" class="form-select">
+              <option value="unpaid" {% if inv.payment_status=='unpaid' %}selected{% endif %}>Απλήρωτο</option>
+              <option value="partial" {% if inv.payment_status=='partial' %}selected{% endif %}>Μερική Πληρωμή</option>
+              <option value="paid" {% if inv.payment_status=='paid' %}selected{% endif %}>Εξοφλημένο</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Μέθοδος Πληρωμής</label>
+            <select name="payment_method" class="form-select">
+              <option value="">—</option>
+              <option value="bank_transfer" {% if inv.payment_method=='bank_transfer' %}selected{% endif %}>Τραπεζική Μεταφορά</option>
+              <option value="cash" {% if inv.payment_method=='cash' %}selected{% endif %}>Μετρητά</option>
+              <option value="check" {% if inv.payment_method=='check' %}selected{% endif %}>Επιταγή</option>
+              <option value="card" {% if inv.payment_method=='card' %}selected{% endif %}>Κάρτα</option>
+            </select>
+          </div>
+          <div class="mb-0">
+            <label class="form-label">Ημ/νία Πληρωμής</label>
+            <input type="date" name="payment_date" class="form-control"
+                   value="{{ inv.payment_date.strftime('%Y-%m-%d') if inv.payment_date else '' }}">
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary w-100">
+        <i class="bi bi-check-lg me-1"></i>Αποθήκευση Αλλαγών
+      </button>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function recalc() {
+  const net = parseFloat(document.getElementById('net_amount').value) || 0;
+  const rate = parseFloat(document.getElementById('vat_rate').value) || 0;
+  const vat = net * rate / 100;
+  document.getElementById('vat_amount').value = vat.toFixed(2);
+  document.getElementById('total_amount').value = (net + vat).toFixed(2);
+}
+</script>
+{% endblock %}

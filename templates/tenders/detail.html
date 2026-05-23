@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+{% block title %}{{ tender.title[:50] }} — ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('tenders.index') }}">Διαγωνισμοί</a></li>
+<li class="breadcrumb-item active">{{ tender.title[:40] }}…</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">{{ tender.title[:80] }}</h1>
+    <div class="d-flex align-items-center gap-2 mt-1">
+      <span class="badge status-{{ tender.status }} fs-6">{{ tender.status_label }}</span>
+      <span class="badge priority-{{ tender.priority }}">{{ {'high':'Υψηλή','medium':'Μεσαία','low':'Χαμηλή'}.get(tender.priority) }}</span>
+      {% if tender.source %}<span class="badge bg-light text-dark border">{{ tender.source }}</span>{% endif %}
+    </div>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{{ url_for('tenders.edit', id=tender.id) }}" class="btn btn-outline-secondary"><i class="bi bi-pencil me-1"></i>Επεξεργασία</a>
+    <a href="{{ url_for('tenders.new_offer', id=tender.id) }}" class="btn btn-gold"><i class="bi bi-calculator me-1"></i>Νέα Προσφορά</a>
+    <form method="POST" action="{{ url_for('tenders.delete', id=tender.id) }}" class="d-inline">
+      <button class="btn btn-outline-danger btn-sm" data-confirm="Διαγραφή διαγωνισμού;"><i class="bi bi-trash"></i></button>
+    </form>
+  </div>
+</div>
+
+<!-- Status flow -->
+<div class="card mb-3 p-3">
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <small class="text-muted fw-semibold me-2">ΜΕΤΑΒΑΣΗ:</small>
+    {% set statuses = [('new','Νέος'),('analysis','Ανάλυση'),('offer_prep','Προσφορά'),('submitted','Υποβλήθηκε'),('won','Κερδήθηκε'),('lost','Χάθηκε'),('no_bid','Δεν Διαγωνιστήκαμε'),('cancelled','Ακυρώθηκε')] %}
+    {% for s, label in statuses %}
+    <form method="POST" action="{{ url_for('tenders.change_status', id=tender.id, new_status=s) }}" class="d-inline">
+      <button class="btn btn-sm {% if tender.status == s %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ label }}</button>
+    </form>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Left: Details -->
+  <div class="col-lg-8">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-info-circle"></i> Στοιχεία Διαγωνισμού</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="form-label">Αναθέτουσα Αρχή</div>
+            <div class="fw-semibold">{{ tender.procuring_authority or '—' }}</div>
+            {% if tender.authority_region %}<small class="text-muted">{{ tender.authority_region }}</small>{% endif %}
+          </div>
+          <div class="col-md-6">
+            <div class="form-label">Επικοινωνία Αρχής</div>
+            <div>{{ tender.authority_contact or '—' }}</div>
+          </div>
+          <div class="col-md-4">
+            <div class="form-label">Προϋπολογισμός</div>
+            <div class="fw-bold text-primary fs-5">{{ '{:,.2f}'.format(tender.budget_estimate|float) }}€ {% if tender.budget_estimate %}{% else %}—{% endif %}</div>
+          </div>
+          <div class="col-md-4">
+            <div class="form-label">Προσφορά μας</div>
+            <div class="fw-bold text-success fs-5">{% if tender.our_offer_amount %}{{ '{:,.2f}'.format(tender.our_offer_amount|float) }}€{% else %}—{% endif %}</div>
+          </div>
+          <div class="col-md-4">
+            <div class="form-label">Διάρκεια Εκτέλεσης</div>
+            <div>{% if tender.execution_months %}{{ tender.execution_months }} μήνες{% else %}—{% endif %}</div>
+          </div>
+          <div class="col-md-4">
+            <div class="form-label">Ημ. Δημοσίευσης</div>
+            <div>{% if tender.publication_date %}{{ tender.publication_date.strftime('%d/%m/%Y') }}{% else %}—{% endif %}</div>
+          </div>
+          <div class="col-md-4">
+            <div class="form-label">Καταληκτική Ημ.</div>
+            {% set days = tender.days_to_deadline %}
+            <div class="fw-semibold {% if days is not none and days <= 7 %}text-danger{% elif days is not none and days <= 14 %}text-warning{% endif %}">
+              {% if tender.submission_deadline %}{{ tender.submission_deadline.strftime('%d/%m/%Y %H:%M') }}{% else %}—{% endif %}
+            </div>
+            {% if days is not none %}<small class="{% if days < 0 %}text-muted{% elif days <= 7 %}text-danger{% elif days <= 14 %}text-warning{% else %}text-success{% endif %}">
+              {% if days < 0 %}Έχει λήξει{% elif days == 0 %}Σήμερα!{% else %}{{ days }} ημέρες{% endif %}
+            </small>{% endif %}
+          </div>
+          <div class="col-md-4">
+            <div class="form-label">Πιθανότητα Επιτυχίας</div>
+            <div class="d-flex align-items-center gap-2">
+              <div class="progress flex-grow-1"><div class="progress-bar bg-success" style="width:{{ tender.win_probability }}%"></div></div>
+              <span class="fw-bold">{{ tender.win_probability }}%</span>
+            </div>
+          </div>
+          {% if tender.ada %}
+          <div class="col-md-6">
+            <div class="form-label">ΑΔΑΜ</div>
+            <code>{{ tender.ada }}</code>
+          </div>
+          {% endif %}
+          {% if tender.cpv_code %}
+          <div class="col-md-6">
+            <div class="form-label">CPV Κωδικός</div>
+            <code>{{ tender.cpv_code }}</code>
+          </div>
+          {% endif %}
+          {% if tender.source_url %}
+          <div class="col-12">
+            <div class="form-label">Σύνδεσμος</div>
+            <a href="{{ tender.source_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-box-arrow-up-right me-1"></i>Άνοιγμα στο {{ tender.source }}
+            </a>
+          </div>
+          {% endif %}
+          {% if tender.description %}
+          <div class="col-12">
+            <div class="form-label">Περιγραφή</div>
+            <div style="white-space:pre-wrap; font-size:13.5px">{{ tender.description }}</div>
+          </div>
+          {% endif %}
+          {% if tender.notes %}
+          <div class="col-12">
+            <div class="form-label">Σημειώσεις</div>
+            <div class="p-3 bg-light rounded" style="white-space:pre-wrap; font-size:13.5px">{{ tender.notes }}</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Documents + AI Chat -->
+    <div class="card mb-3" id="documents">
+      <div class="card-header justify-content-between">
+        <span><i class="bi bi-folder2-open me-1 text-gold"></i>Έγγραφα Διαγωνισμού ({{ docs|length }})</span>
+        <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#uploadDocModal">
+          <i class="bi bi-upload me-1"></i>Ανέβασμα
+        </button>
+      </div>
+      {% if docs %}
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+          <thead class="table-dark"><tr><th>Τίτλος</th><th>Τύπος</th><th>Κείμενο AI</th><th>Drive</th><th></th></tr></thead>
+          <tbody>
+            {% for d in docs %}
+            <tr>
+              <td class="fw-semibold">
+                {{ d.title }}
+                <div class="text-muted small">{{ d.file_name }}</div>
+              </td>
+              <td><span class="badge bg-secondary">{{ d.type_label }}</span></td>
+              <td>
+                {% if d.extracted_text %}
+                <span class="badge bg-success"><i class="bi bi-check-lg"></i> {{ (d.extracted_text|length / 1000)|int }}k χαρ.</span>
+                {% else %}
+                <span class="badge bg-light text-dark border">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if d.drive_file_id %}<i class="bi bi-cloud-check text-success"></i>{% else %}<i class="bi bi-cloud-slash text-muted"></i>{% endif %}
+              </td>
+              <td>
+                <div class="btn-group btn-group-sm">
+                  <a href="{{ url_for('tenders.view_document', doc_id=d.id) }}" target="_blank" class="btn btn-outline-primary" title="Άνοιγμα"><i class="bi bi-eye"></i></a>
+                  <form method="post" action="{{ url_for('tenders.delete_document', doc_id=d.id) }}" class="d-inline" onsubmit="return confirm('Διαγραφή εγγράφου;')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-outline-danger"><i class="bi bi-trash"></i></button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-center text-muted py-4">
+        <i class="bi bi-folder-x fs-2 opacity-25 d-block mb-2"></i>
+        Ανεβάστε Διακήρυξη, Τεχνική Μελέτη, Οικονομική Προσφορά και άλλα έγγραφα.
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- AI Chat -->
+    <div class="card mb-3" id="ai-chat">
+      <div class="card-header">
+        <i class="bi bi-robot me-1 text-gold"></i>AI Ανάλυση Διαγωνισμού
+        {% if docs|selectattr('extracted_text')|list|length == 0 %}
+        <span class="badge bg-warning text-dark ms-2">Ανεβάστε PDF για AI ανάλυση</span>
+        {% else %}
+        <span class="badge bg-success ms-2">{{ docs|selectattr('extracted_text')|list|length }} έγγραφα αναλύονται</span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <div class="alert alert-secondary small py-2 mb-3">
+          <i class="bi bi-info-circle me-1"></i>
+          Ρωτήστε το AI για τους όρους, απαιτήσεις, CPV, κριτήρια ανάθεσης, εγγυητικές, προθεσμίες και οτιδήποτε αφορά αυτόν τον διαγωνισμό.
+        </div>
+        <div id="tender-chat-box" style="height:280px; overflow-y:auto; border:1px solid #dee2e6; border-radius:8px; padding:12px; background:#fafafa;" class="mb-3">
+          <div class="text-center text-muted small pt-4">
+            <i class="bi bi-robot fs-2 d-block mb-2 opacity-50"></i>
+            Κάντε μια ερώτηση για τον διαγωνισμό…
+          </div>
+        </div>
+        <div class="input-group">
+          <input type="text" id="tenderChatInput" class="form-control"
+                 placeholder="π.χ. Ποιες εγγυητικές επιστολές απαιτούνται;" />
+          <button class="btn btn-primary" onclick="sendTenderChat()">
+            <i class="bi bi-send-fill"></i>
+          </button>
+        </div>
+        <div class="text-muted small mt-1">
+          <i class="bi bi-exclamation-triangle me-1"></i>Για οριστικές αποφάσεις συμβουλευτείτε ειδικό.
+        </div>
+      </div>
+    </div>
+
+    <!-- Offers -->
+    <div class="card">
+      <div class="card-header justify-content-between">
+        <span><i class="bi bi-calculator"></i> Προσφορές ({{ offers|length }})</span>
+        <a href="{{ url_for('tenders.new_offer', id=tender.id) }}" class="btn btn-sm btn-gold"><i class="bi bi-plus"></i> Νέα</a>
+      </div>
+      {% if offers %}
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead><tr>
+            <th>Έκδοση</th><th>Εργασία</th><th>Υλικά</th><th>Υπεργολ.</th><th>Εξοπλ.</th><th>Καθαρό</th><th>Σύνολο</th><th>Κατάσταση</th>
+          </tr></thead>
+          <tbody>
+            {% for o in offers %}
+            <tr>
+              <td><span class="badge bg-secondary">v{{ o.version }}</span></td>
+              <td>{{ '{:,.0f}'.format(o.labor_cost|float) }}€</td>
+              <td>{{ '{:,.0f}'.format(o.materials_cost|float) }}€</td>
+              <td>{{ '{:,.0f}'.format(o.subcontractor_cost|float) }}€</td>
+              <td>{{ '{:,.0f}'.format(o.equipment_cost|float) }}€</td>
+              <td class="fw-semibold">{{ '{:,.2f}'.format(o.total_net|float) }}€</td>
+              <td class="fw-bold text-primary">{{ '{:,.2f}'.format(o.total_gross|float) }}€</td>
+              <td><span class="badge status-{{ o.status }}">{{ o.status }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-center text-muted py-4">
+        <i class="bi bi-calculator fs-2 opacity-25 d-block mb-2"></i>
+        Δεν υπάρχει προσφορά ακόμα.
+        <a href="{{ url_for('tenders.new_offer', id=tender.id) }}" class="d-block mt-2">Δημιουργία Προσφοράς</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Right sidebar -->
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-person"></i> Υπεύθυνος</div>
+      <div class="card-body">
+        {% if tender.assigned_to %}
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-person-circle fs-3 text-primary"></i>
+          <div>
+            <div class="fw-semibold">{{ tender.assigned_to.full_name }}</div>
+            <div class="text-muted small">{{ tender.assigned_to.email }}</div>
+          </div>
+        </div>
+        {% else %}<span class="text-muted">Δεν έχει ανατεθεί</span>{% endif %}
+      </div>
+    </div>
+
+    {% if tender.projects.count() > 0 %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-building"></i> Συνδεδεμένα Έργα</div>
+      <div class="list-group list-group-flush">
+        {% for p in tender.projects %}
+        <a href="{{ url_for('projects.detail', id=p.id) }}" class="list-group-item list-group-item-action">
+          <div class="fw-semibold">{{ p.code }}</div>
+          <small class="text-muted">{{ p.title[:50] }}</small>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <div class="card-header"><i class="bi bi-clock-history"></i> Χρονολόγιο</div>
+      <div class="card-body">
+        <div class="small text-muted">Δημιουργήθηκε: {{ tender.created_at.strftime('%d/%m/%Y') }}</div>
+        <div class="small text-muted mt-1">Ενημερώθηκε: {{ tender.updated_at.strftime('%d/%m/%Y %H:%M') }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Upload Document Modal -->
+<div class="modal fade" id="uploadDocModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('tenders.upload_document', id=tender.id) }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Ανέβασμα Εγγράφου Διαγωνισμού</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body row g-3">
+          <div class="col-12">
+            <label class="form-label fw-semibold">Αρχείο *</label>
+            <input type="file" name="doc_file" class="form-control" accept=".pdf,.doc,.docx,.xlsx" required>
+            <div class="form-text">PDF προτιμάται για αυτόματη εξαγωγή κειμένου από το AI.</div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Τίτλος Εγγράφου</label>
+            <input type="text" name="doc_title" class="form-control" placeholder="π.χ. Διακήρυξη Ανοικτής Διαδικασίας">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Τύπος</label>
+            <select name="doc_type" class="form-select">
+              <option value="proclamation">Διακήρυξη</option>
+              <option value="technical">Τεχνική Έκθεση / Μελέτη</option>
+              <option value="financial">Οικονομική Προσφορά</option>
+              <option value="study">Τεχνική Περιγραφή</option>
+              <option value="qualifications">Δικαιολογητικά Συμμετοχής</option>
+              <option value="other">Άλλο</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Ακύρωση</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-upload me-1"></i>Ανέβασμα</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const TENDER_CHAT_URL = '{{ url_for("tenders.ai_chat", id=tender.id) }}';
+
+async function sendTenderChat() {
+  const input = document.getElementById('tenderChatInput');
+  const box = document.getElementById('tender-chat-box');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+
+  box.innerHTML += `<div class="d-flex justify-content-end mb-2">
+    <div class="p-2 rounded" style="background:#111;color:#c9a84c;max-width:80%;font-size:14px">${msg}</div>
+  </div>`;
+  box.scrollTop = box.scrollHeight;
+
+  const thinkId = 'think-' + Date.now();
+  box.innerHTML += `<div id="${thinkId}" class="text-muted small mb-2"><i class="bi bi-robot me-1"></i>Αναλύει…</div>`;
+  box.scrollTop = box.scrollHeight;
+
+  try {
+    const resp = await fetch(TENDER_CHAT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg })
+    });
+    const data = await resp.json();
+    document.getElementById(thinkId)?.remove();
+    const text = data.answer || data.error || 'Σφάλμα.';
+    const formatted = text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    box.innerHTML += `<div class="d-flex mb-3">
+      <div class="p-2 rounded border" style="background:#fff;max-width:90%;font-size:13.5px">${formatted}</div>
+    </div>`;
+    box.scrollTop = box.scrollHeight;
+  } catch (e) {
+    document.getElementById(thinkId)?.remove();
+    box.innerHTML += `<div class="text-danger small mb-2">Σφάλμα σύνδεσης.</div>`;
+  }
+}
+
+document.getElementById('tenderChatInput')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTenderChat(); }
+});
+</script>
+{% endblock %}

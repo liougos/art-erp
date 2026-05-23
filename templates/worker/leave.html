@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Αιτήματα Άδειας — Πύλη Εργαζομένου{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('worker.dashboard') }}">Πύλη Εργαζομένου</a></li>
+<li class="breadcrumb-item active">Άδειες</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-calendar-week me-2 text-primary"></i>Άδειες</h1>
+    <p class="page-subtitle">{{ emp.full_name }}</p>
+  </div>
+  <button class="btn btn-gold" data-bs-toggle="modal" data-bs-target="#newLeaveModal">
+    <i class="bi bi-plus-lg me-1"></i>Νέο Αίτημα Άδειας
+  </button>
+</div>
+
+<!-- Leave Balance -->
+<div class="row g-3 mb-4">
+  {% set year = today.year %}
+  {% set total = (balance.total_days if balance else emp.annual_leave_days) or 20 %}
+  {% set used = balance.used_days if balance else 0 %}
+  {% set remaining = total - used %}
+  {% set pending_days = leaves|selectattr('status','eq','pending')|selectattr('leave_type','eq','annual')|map(attribute='working_days')|sum %}
+
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon blue"><i class="bi bi-calendar-plus"></i></div>
+      <div><div class="kpi-value">{{ total }}</div><div class="kpi-label">Δικαιούμενες {{ year }}</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon orange"><i class="bi bi-calendar-check"></i></div>
+      <div><div class="kpi-value">{{ used }}</div><div class="kpi-label">Χρησιμοποιήθηκαν</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon {% if remaining <= 3 %}red{% elif remaining <= 7 %}orange{% else %}green{% endif %}">
+        <i class="bi bi-calendar"></i>
+      </div>
+      <div><div class="kpi-value">{{ remaining }}</div><div class="kpi-label">Υπόλοιπο (εγκεκρ.)</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon purple"><i class="bi bi-clock-history"></i></div>
+      <div><div class="kpi-value">{{ pending_days }}</div><div class="kpi-label">Σε Αναμονή</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Progress bar -->
+{% if total > 0 %}
+<div class="card mb-4">
+  <div class="card-body py-3">
+    <div class="d-flex justify-content-between mb-1" style="font-size:13px">
+      <span>Χρησιμοποιημένες άδειες {{ year }}</span>
+      <span>{{ used }} / {{ total }} ημέρες ({{ '{:.0f}'.format(used/total*100) }}%)</span>
+    </div>
+    <div class="progress" style="height:12px;border-radius:6px">
+      <div class="progress-bar bg-success" style="width:{{ [used/total*100, 100]|min|int }}%"></div>
+      {% if pending_days > 0 %}
+      <div class="progress-bar bg-warning" style="width:{{ [pending_days/total*100, 100-used/total*100]|min|int }}%"></div>
+      {% endif %}
+    </div>
+    <div class="d-flex gap-3 mt-1" style="font-size:11px;color:#666">
+      <span><span style="display:inline-block;width:10px;height:10px;background:#198754;border-radius:2px"></span> Εγκεκριμένες</span>
+      {% if pending_days > 0 %}<span><span style="display:inline-block;width:10px;height:10px;background:#ffc107;border-radius:2px"></span> Σε αναμονή</span>{% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Leave Requests -->
+<div class="card">
+  <div class="card-header"><i class="bi bi-list-ul text-primary"></i> Ιστορικό Αιτημάτων</div>
+  {% if leaves %}
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Είδος</th>
+          <th>Από</th>
+          <th>Έως</th>
+          <th>Εργάσιμες</th>
+          <th>Αιτιολογία</th>
+          <th>Κατάσταση</th>
+          <th>Σχόλια</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for leave in leaves %}
+        <tr>
+          <td>
+            <span class="badge bg-secondary" style="font-size:11px">
+              {{ {'annual':'Κανονική','sick':'Ασθένεια','unpaid':'Άνευ Αποδοχών','other':'Άλλη'}.get(leave.leave_type, leave.leave_type) }}
+            </span>
+          </td>
+          <td>{{ leave.start_date.strftime('%d/%m/%Y') }}</td>
+          <td>{{ leave.end_date.strftime('%d/%m/%Y') }}</td>
+          <td class="text-center fw-semibold">{{ leave.working_days }}</td>
+          <td class="text-truncate" style="max-width:150px"><small>{{ leave.reason or '—' }}</small></td>
+          <td>
+            <span class="badge {{ leave.status_color }}">
+              {{ {'pending':'Αναμονή','approved':'Εγκρίθηκε','rejected':'Απορρίφθηκε'}.get(leave.status, leave.status) }}
+            </span>
+          </td>
+          <td><small class="text-muted">{{ leave.review_notes or '' }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body text-center text-muted py-5">
+    <i class="bi bi-calendar d-block fs-1 opacity-25 mb-3"></i>
+    <p class="mb-3">Δεν έχετε υποβάλει αίτημα άδειας ακόμα.</p>
+    <button class="btn btn-gold" data-bs-toggle="modal" data-bs-target="#newLeaveModal">
+      <i class="bi bi-plus-lg me-1"></i>Υποβολή Αιτήματος
+    </button>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Contract link -->
+{% if emp.contract_file_path %}
+<div class="mt-3">
+  <a href="{{ url_for('worker.view_contract') }}" target="_blank" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-file-earmark-text me-1"></i>Προβολή Σύμβασης Εργασίας
+  </a>
+</div>
+{% endif %}
+
+<!-- New Leave Modal -->
+<div class="modal fade" id="newLeaveModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Νέο Αίτημα Άδειας</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('worker.new_leave') }}">
+        <div class="modal-body">
+          <div class="alert alert-info" style="font-size:13px">
+            <i class="bi bi-info-circle me-1"></i>
+            Υπόλοιπο κανονικής άδειας: <strong>{{ remaining }} εργάσιμες ημέρες</strong>.
+            Υπολογίζονται μόνο εργάσιμες (Δευτ–Παρ).
+          </div>
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Είδος Άδειας *</label>
+              <select name="leave_type" class="form-select" id="leaveTypeSelect" onchange="updateInfo()">
+                <option value="annual">Κανονική Άδεια</option>
+                <option value="sick">Ασθένεια</option>
+                <option value="unpaid">Άνευ Αποδοχών</option>
+                <option value="other">Άλλη</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Από *</label>
+              <input type="date" name="start_date" id="startDate" class="form-control"
+                     value="{{ today.strftime('%Y-%m-%d') }}" required onchange="calcDays()">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Έως *</label>
+              <input type="date" name="end_date" id="endDate" class="form-control"
+                     value="{{ today.strftime('%Y-%m-%d') }}" required onchange="calcDays()">
+            </div>
+            <div class="col-12" id="daysInfo" style="display:none">
+              <div class="alert alert-secondary py-2 mb-0" style="font-size:13px">
+                <i class="bi bi-calendar-range me-1"></i>
+                Εκτιμώμενες εργάσιμες ημέρες: <strong id="daysCount">—</strong>
+              </div>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Αιτιολογία</label>
+              <textarea name="reason" class="form-control" rows="2" placeholder="Προαιρετικά..."></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Ακύρωση</button>
+          <button type="submit" class="btn btn-gold btn-sm">Υποβολή Αιτήματος</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function calcDays() {
+  const s = document.getElementById('startDate').value;
+  const e = document.getElementById('endDate').value;
+  if (!s || !e) return;
+  let start = new Date(s), end = new Date(e);
+  if (end < start) { document.getElementById('daysCount').textContent = '—'; return; }
+  let days = 0;
+  let cur = new Date(start);
+  while (cur <= end) {
+    if (cur.getDay() > 0 && cur.getDay() < 6) days++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  document.getElementById('daysCount').textContent = days + ' ημέρες';
+  document.getElementById('daysInfo').style.display = 'block';
+}
+calcDays();
+</script>
+{% endblock %}

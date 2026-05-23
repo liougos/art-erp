@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Ημερολόγιο Ομάδας — ART ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Ημερολόγιο Ομάδας</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h2 class="page-title mb-0"><i class="bi bi-calendar3 me-2 text-warning"></i>Ημερολόγιο Ομάδας</h2>
+</div>
+
+<!-- Legend -->
+<div class="d-flex gap-3 flex-wrap mb-3">
+  <span class="d-flex align-items-center gap-1">
+    <span class="d-inline-block rounded" style="width:14px;height:14px;background:#c9a84c"></span>
+    <span class="small text-muted">Έργα</span>
+  </span>
+  <span class="d-flex align-items-center gap-1">
+    <span class="d-inline-block rounded" style="width:14px;height:14px;background:#6c757d"></span>
+    <span class="small text-muted">Milestones</span>
+  </span>
+  <span class="d-flex align-items-center gap-1">
+    <span class="d-inline-block rounded" style="width:14px;height:14px;background:#dc3545"></span>
+    <span class="small text-muted">Άδειες</span>
+  </span>
+  <span class="d-flex align-items-center gap-1">
+    <span class="d-inline-block rounded" style="width:14px;height:14px;background:#0d6efd"></span>
+    <span class="small text-muted">Αναθέσεις</span>
+  </span>
+</div>
+
+<!-- Filter toggles -->
+<div class="card card-dark mb-3">
+  <div class="card-body py-2">
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+      <span class="text-muted small me-1">Εμφάνιση:</span>
+      <button class="btn btn-sm btn-outline-warning filter-btn active" data-type="project">Έργα</button>
+      <button class="btn btn-sm btn-outline-secondary filter-btn active" data-type="milestone">Milestones</button>
+      <button class="btn btn-sm btn-outline-danger filter-btn active" data-type="leave">Άδειες</button>
+      <button class="btn btn-sm btn-outline-primary filter-btn active" data-type="assignment">Αναθέσεις</button>
+      <div class="ms-auto">
+        <select id="empFilter" class="form-select form-select-sm bg-dark text-white border-secondary" style="min-width:160px">
+          <option value="">Όλοι οι εργαζόμενοι</option>
+          {% for emp in employees %}
+          <option value="{{ emp.full_name }}">{{ emp.full_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FullCalendar container -->
+<div class="card card-dark">
+  <div class="card-body p-2">
+    <div id="calendar"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.11/locales/el.global.min.js"></script>
+<script>
+let calendar;
+let allEvents = [];
+let activeTypes = new Set(['project','milestone','leave','assignment']);
+let empFilter = '';
+
+document.addEventListener('DOMContentLoaded', function () {
+  const calEl = document.getElementById('calendar');
+
+  calendar = new FullCalendar.Calendar(calEl, {
+    initialView: 'dayGridMonth',
+    locale: 'el',
+    height: 'auto',
+    headerToolbar: {
+      left: 'prev,next today',
+      center: 'title',
+      right: 'dayGridMonth,timeGridWeek,listMonth'
+    },
+    buttonText: { today:'Σήμερα', month:'Μήνας', week:'Εβδομάδα', list:'Λίστα' },
+    events: function(info, success) {
+      fetch('{{ url_for("calendar.events") }}')
+        .then(r => r.json())
+        .then(data => {
+          allEvents = data;
+          success(filterEvents());
+        });
+    },
+    eventClick: function(info) {
+      if (info.event.url) {
+        info.jsEvent.preventDefault();
+        window.location.href = info.event.url;
+      }
+    },
+    eventDisplay: 'block',
+    dayMaxEvents: 4,
+  });
+
+  calendar.render();
+
+  // Type filter buttons
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.type;
+      if (activeTypes.has(type)) {
+        activeTypes.delete(type);
+        btn.classList.remove('active');
+        btn.style.opacity = '0.4';
+      } else {
+        activeTypes.add(type);
+        btn.classList.add('active');
+        btn.style.opacity = '1';
+      }
+      refreshEvents();
+    });
+  });
+
+  // Employee filter
+  document.getElementById('empFilter').addEventListener('change', function() {
+    empFilter = this.value;
+    refreshEvents();
+  });
+});
+
+function filterEvents() {
+  return allEvents.filter(ev => {
+    const type = ev.extendedProps && ev.extendedProps.type;
+    if (!activeTypes.has(type)) return false;
+    if (empFilter) {
+      const emp = ev.extendedProps && ev.extendedProps.employee;
+      if (emp && !emp.includes(empFilter)) return false;
+    }
+    return true;
+  });
+}
+
+function refreshEvents() {
+  calendar.removeAllEvents();
+  filterEvents().forEach(ev => calendar.addEvent(ev));
+}
+</script>
+<style>
+#calendar { --fc-border-color: #333; --fc-page-bg-color: transparent; --fc-neutral-bg-color: #1a1a1a;
+  --fc-event-text-color: #fff; --fc-today-bg-color: rgba(201,168,76,0.12); }
+.fc-toolbar-title { color: #c9a84c !important; }
+.fc-button { background:#222 !important; border-color:#444 !important; color:#ccc !important; }
+.fc-button-active, .fc-button:hover { background:#c9a84c !important; border-color:#c9a84c !important; color:#111 !important; }
+.fc-day-today .fc-daygrid-day-number { color: #c9a84c; font-weight:bold; }
+.fc-col-header-cell { background:#1a1a1a; }
+.fc-daygrid-day { background:#111; }
+</style>
+{% endblock %}

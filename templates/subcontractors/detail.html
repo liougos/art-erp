@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% block title %}{{ sub.company_name }} — ART ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('subcontractors.index') }}">Υπεργολάβοι</a></li>
+<li class="breadcrumb-item active">{{ sub.company_name }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h2 class="page-title mb-1">{{ sub.company_name }}</h2>
+    <span class="badge bg-secondary">{{ sub.specialty_label }}</span>
+    {% if sub.portal_username %}<span class="badge bg-primary ms-1"><i class="bi bi-globe me-1"></i>Portal Ενεργό</span>{% endif %}
+    {% if not sub.is_active %}<span class="badge bg-danger ms-1">Ανενεργός</span>{% endif %}
+  </div>
+  <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalEdit">
+    <i class="bi bi-pencil me-1"></i>Επεξεργασία
+  </button>
+</div>
+
+<div class="row g-4">
+  <!-- Left: Info + Contracts -->
+  <div class="col-lg-8">
+
+    <!-- Contracts -->
+    <div class="card card-dark mb-3">
+      <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Συμβάσεις</h6>
+        <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#modalNewContract">
+          <i class="bi bi-plus-lg me-1"></i>Νέα Σύμβαση
+        </button>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-dark table-hover mb-0">
+            <thead><tr><th>Τίτλος</th><th>Έργο</th><th class="text-end">Αξία €</th><th class="text-end">Πληρωμένο €</th><th>Κατάσταση</th><th></th></tr></thead>
+            <tbody>
+              {% for c in contracts %}
+              <tr>
+                <td>
+                  <strong>{{ c.title }}</strong>
+                  {% if c.start_date %}<div class="text-muted small">{{ c.start_date.strftime('%d/%m/%Y') }}{% if c.end_date %} → {{ c.end_date.strftime('%d/%m/%Y') }}{% endif %}</div>{% endif %}
+                </td>
+                <td class="text-muted small">{% if c.project %}<a href="{{ url_for('projects.detail', id=c.project.id) }}" class="text-warning text-decoration-none">[{{ c.project.code }}]</a>{% else %}—{% endif %}</td>
+                <td class="text-end">{{ '{:,.0f}'.format(c.contract_value|float) }} €</td>
+                <td class="text-end text-success">{{ '{:,.0f}'.format(c.total_paid) }} €</td>
+                <td><span class="badge bg-{{ c.status_color }}">{{ c.status_label }}</span></td>
+                <td>
+                  <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalInvoice{{ c.id }}" title="Τιμολόγιο">
+                      <i class="bi bi-receipt"></i>
+                    </button>
+                    <form method="post" action="{{ url_for('subcontractors.contract_status', id=c.id) }}" class="d-inline">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <select name="status" class="form-select form-select-sm bg-dark text-white border-secondary" onchange="this.form.submit()" style="width:auto">
+                        {% for s,l in [('draft','Πρόχειρο'),('signed','Υπογεγραμμένο'),('active','Ενεργό'),('completed','Ολοκληρώθηκε'),('terminated','Ακυρώθηκε')] %}
+                        <option value="{{ s }}" {% if c.status==s %}selected{% endif %}>{{ l }}</option>
+                        {% endfor %}
+                      </select>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              <!-- Sub-table: invoices -->
+              {% set invs = c.invoices.all() %}
+              {% if invs %}
+              <tr style="background:#0a0a0a">
+                <td colspan="6" class="py-0 px-4">
+                  <table class="table table-sm mb-0" style="font-size:11px">
+                    <tbody>
+                      {% for inv in invs %}
+                      <tr>
+                        <td class="text-muted">{{ inv.invoice_number or '—' }}</td>
+                        <td class="text-muted">{{ inv.invoice_date.strftime('%d/%m/%Y') if inv.invoice_date else '—' }}</td>
+                        <td class="text-end">{{ '{:,.2f}'.format(inv.total_amount|float) }} €</td>
+                        <td><span class="badge bg-{{ inv.status_color }}">{{ inv.status_label }}</span></td>
+                        <td>
+                          {% if inv.status != 'paid' %}
+                          <form method="post" action="{{ url_for('subcontractors.pay_invoice', id=inv.id) }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-link btn-sm text-success p-0" style="font-size:10px">Σήμανση Πληρωμένο</button>
+                          </form>
+                          {% endif %}
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
+              {% endif %}
+              {% else %}
+              <tr><td colspan="6" class="text-center text-muted py-3 small">Δεν υπάρχουν συμβάσεις.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Work Logs -->
+    <div class="card card-dark">
+      <div class="card-header border-secondary"><h6 class="mb-0">Τελευταίες Αναφορές Εργασίας</h6></div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-dark table-sm mb-0">
+            <thead><tr><th>Ημ/νία</th><th>Σύμβαση</th><th>Περιγραφή</th><th class="text-end">Εργ.</th><th class="text-end">Ώρες</th><th class="text-end">%</th><th>Κατ.</th></tr></thead>
+            <tbody>
+              {% set all_logs = [] %}
+              {% for c in contracts %}{% for log in c.work_logs.order_by('log_date desc').limit(5).all() %}{% if all_logs.append(log) %}{% endif %}{% endfor %}{% endfor %}
+              {% for log in all_logs|sort(attribute='log_date', reverse=True)|list[:10] %}
+              <tr>
+                <td class="small">{{ log.log_date.strftime('%d/%m/%Y') }}</td>
+                <td class="small text-muted">{{ log.contract.title[:25] if log.contract else '—' }}</td>
+                <td class="small">{{ log.work_description[:50] }}</td>
+                <td class="text-end small">{{ log.workers_count }}</td>
+                <td class="text-end small">{{ log.hours_worked }}h</td>
+                <td class="text-end small">{{ log.completion_pct }}%</td>
+                <td><span class="badge bg-{{ log.status_color }}" style="font-size:9px">{{ log.status }}</span></td>
+              </tr>
+              {% else %}
+              <tr><td colspan="7" class="text-center text-muted small py-2">Δεν υπάρχουν αναφορές.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Sidebar -->
+  <div class="col-lg-4">
+    <div class="card card-dark mb-3">
+      <div class="card-header border-secondary"><h6 class="mb-0">Στοιχεία</h6></div>
+      <div class="card-body">
+        <dl class="row small mb-0">
+          <dt class="col-5 text-muted">ΑΦΜ</dt><dd class="col-7">{{ sub.afm or '—' }}</dd>
+          <dt class="col-5 text-muted">Υπεύθυνος</dt><dd class="col-7">{{ sub.contact_name or '—' }}</dd>
+          <dt class="col-5 text-muted">Τηλέφωνο</dt><dd class="col-7">{{ sub.phone or '—' }}</dd>
+          <dt class="col-5 text-muted">Email</dt><dd class="col-7">{{ sub.email or '—' }}</dd>
+          <dt class="col-5 text-muted">Διεύθυνση</dt><dd class="col-7">{{ sub.address or '—' }}</dd>
+          <dt class="col-5 text-muted">Ασφάλεια</dt>
+          <dd class="col-7">
+            {{ sub.insurance_number or '—' }}
+            {% if sub.insurance_expiry %}
+            <br><span class="badge bg-{{ 'success' if sub.insurance_ok else 'danger' }}">
+              {{ sub.insurance_expiry.strftime('%d/%m/%Y') }}
+            </span>
+            {% endif %}
+          </dd>
+          {% if sub.portal_username %}
+          <dt class="col-5 text-muted">Portal User</dt><dd class="col-7 text-warning">{{ sub.portal_username }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    {% if sub.notes %}
+    <div class="card card-dark">
+      <div class="card-header border-secondary"><h6 class="mb-0">Σημειώσεις</h6></div>
+      <div class="card-body small text-muted" style="white-space:pre-line">{{ sub.notes }}</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── MODALS ── -->
+
+<!-- Edit -->
+<div class="modal fade" id="modalEdit" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Επεξεργασία: {{ sub.company_name }}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('subcontractors.edit', id=sub.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-8"><label class="form-label">Επωνυμία *</label>
+              <input type="text" name="company_name" class="form-control bg-dark text-white border-secondary" value="{{ sub.company_name }}" required></div>
+            <div class="col-md-4"><label class="form-label">ΑΦΜ</label>
+              <input type="text" name="afm" class="form-control bg-dark text-white border-secondary" value="{{ sub.afm or '' }}"></div>
+            <div class="col-md-6"><label class="form-label">Υπεύθυνος</label>
+              <input type="text" name="contact_name" class="form-control bg-dark text-white border-secondary" value="{{ sub.contact_name or '' }}"></div>
+            <div class="col-md-3"><label class="form-label">Τηλέφωνο</label>
+              <input type="text" name="phone" class="form-control bg-dark text-white border-secondary" value="{{ sub.phone or '' }}"></div>
+            <div class="col-md-3"><label class="form-label">Email</label>
+              <input type="email" name="email" class="form-control bg-dark text-white border-secondary" value="{{ sub.email or '' }}"></div>
+            <div class="col-md-4"><label class="form-label">Ειδικότητα</label>
+              <select name="specialty" class="form-select bg-dark text-white border-secondary">
+                {% for k,v in specialties %}<option value="{{ k }}" {% if sub.specialty==k %}selected{% endif %}>{{ v }}</option>{% endfor %}
+              </select></div>
+            <div class="col-md-2"><label class="form-label">Βαθμολογία</label>
+              <select name="rating" class="form-select bg-dark text-white border-secondary">
+                {% for i in range(1,6) %}<option value="{{ i }}" {% if sub.rating==i %}selected{% endif %}>{{ i }}★</option>{% endfor %}
+              </select></div>
+            <div class="col-md-3"><label class="form-label">Αρ. Ασφάλειας</label>
+              <input type="text" name="insurance_number" class="form-control bg-dark text-white border-secondary" value="{{ sub.insurance_number or '' }}"></div>
+            <div class="col-md-3"><label class="form-label">Λήξη Ασφάλειας</label>
+              <input type="date" name="insurance_expiry" class="form-control bg-dark text-white border-secondary" value="{{ sub.insurance_expiry or '' }}"></div>
+            <div class="col-md-3"><label class="form-label">Κατάσταση</label>
+              <select name="is_active" class="form-select bg-dark text-white border-secondary">
+                <option value="1" {% if sub.is_active %}selected{% endif %}>Ενεργός</option>
+                <option value="0" {% if not sub.is_active %}selected{% endif %}>Ανενεργός</option>
+              </select></div>
+            <div class="col-12"><hr class="border-secondary"><p class="text-muted small mb-2">Portal Πρόσβαση</p></div>
+            <div class="col-md-6"><label class="form-label">Username</label>
+              <input type="text" name="portal_username" class="form-control bg-dark text-white border-secondary" value="{{ sub.portal_username or '' }}"></div>
+            <div class="col-md-6"><label class="form-label">Νέο Password (αφήστε κενό για αμετάβλητο)</label>
+              <input type="password" name="portal_password" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-12"><label class="form-label">Σημειώσεις</label>
+              <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="2">{{ sub.notes or '' }}</textarea></div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- New Contract -->
+<div class="modal fade" id="modalNewContract" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Νέα Σύμβαση — {{ sub.company_name }}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('subcontractors.new_contract', sub_id=sub.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12"><label class="form-label">Τίτλος *</label>
+              <input type="text" name="title" class="form-control bg-dark text-white border-secondary" required></div>
+            <div class="col-md-6"><label class="form-label">Συνδεδεμένο Έργο</label>
+              <select name="project_id" class="form-select bg-dark text-white border-secondary">
+                <option value="">— Κανένα —</option>
+                {% for p in projects %}<option value="{{ p.id }}">[{{ p.code }}] {{ p.title[:40] }}</option>{% endfor %}
+              </select></div>
+            <div class="col-md-3"><label class="form-label">Αξία Σύμβασης €</label>
+              <input type="number" step="0.01" name="contract_value" class="form-control bg-dark text-white border-secondary" value="0"></div>
+            <div class="col-md-3"><label class="form-label">Όροι Πληρωμής</label>
+              <input type="text" name="payment_terms" class="form-control bg-dark text-white border-secondary" placeholder="π.χ. 30 ημέρες"></div>
+            <div class="col-md-3"><label class="form-label">Έναρξη</label>
+              <input type="date" name="start_date" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-md-3"><label class="form-label">Λήξη</label>
+              <input type="date" name="end_date" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-12"><label class="form-label">Αντικείμενο Εργασιών</label>
+              <textarea name="scope_of_work" class="form-control bg-dark text-white border-secondary" rows="3"></textarea></div>
+            <div class="col-12"><label class="form-label">Σημειώσεις</label>
+              <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="2"></textarea></div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-gold">Δημιουργία</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Invoice Modals -->
+{% for c in contracts %}
+<div class="modal fade" id="modalInvoice{{ c.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Τιμολόγιο: {{ c.title[:40] }}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('subcontractors.new_invoice', id=c.id) }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label">Αρ. Τιμολογίου</label>
+              <input type="text" name="invoice_number" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-md-6"><label class="form-label">Ημερομηνία</label>
+              <input type="date" name="invoice_date" class="form-control bg-dark text-white border-secondary" value="{{ today }}"></div>
+            <div class="col-md-3"><label class="form-label">Από</label>
+              <input type="date" name="period_from" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-md-3"><label class="form-label">Έως</label>
+              <input type="date" name="period_to" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-md-3"><label class="form-label">Καθαρή Αξία €</label>
+              <input type="number" step="0.01" name="amount_net" id="net{{ c.id }}" class="form-control bg-dark text-white border-secondary" value="0" oninput="calcVat({{ c.id }})"></div>
+            <div class="col-md-3"><label class="form-label">ΦΠΑ %</label>
+              <input type="number" step="0.01" name="vat_rate" id="vr{{ c.id }}" class="form-control bg-dark text-white border-secondary" value="24" oninput="calcVat({{ c.id }})"></div>
+            <div class="col-12 text-end text-warning small" id="total{{ c.id }}">Σύνολο: 0,00 €</div>
+            <div class="col-12"><label class="form-label">Αρχείο Τιμολογίου (PDF)</label>
+              <input type="file" name="invoice_file" accept=".pdf,.jpg,.png" class="form-control bg-dark text-white border-secondary"></div>
+            <div class="col-12"><label class="form-label">Σημειώσεις</label>
+              <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="2"></textarea></div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-primary">Καταχώρηση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function calcVat(cid) {
+  const net = parseFloat(document.getElementById('net'+cid).value)||0;
+  const vr  = parseFloat(document.getElementById('vr'+cid).value)||0;
+  const total = net + (net*vr/100);
+  document.getElementById('total'+cid).textContent = 'Σύνολο: ' + total.toLocaleString('el-GR',{minimumFractionDigits:2}) + ' €';
+}
+</script>
+{% endblock %}

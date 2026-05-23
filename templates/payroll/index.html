@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% block title %}Μισθοδοσία — ART ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Μισθοδοσία</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h2 class="page-title mb-0"><i class="bi bi-cash-coin me-2 text-warning"></i>Μισθοδοσία</h2>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('payroll.export_excel', month=month, year=year) }}" class="btn btn-outline-success btn-sm">
+      <i class="bi bi-file-earmark-excel me-1"></i>Excel
+    </a>
+    <button class="btn btn-gold" data-bs-toggle="modal" data-bs-target="#modalGenerate">
+      <i class="bi bi-plus-lg me-1"></i>Δημιουργία Μισθοδοσίας
+    </button>
+  </div>
+</div>
+
+<!-- Month/Year filter -->
+<div class="card card-dark mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-auto">
+        <select name="month" class="form-select form-select-sm">
+          {% for i in range(1,13) %}
+          <option value="{{ i }}" {% if i==month %}selected{% endif %}>
+            {{ ['','Ιανουάριος','Φεβρουάριος','Μάρτιος','Απρίλιος','Μάιος','Ιούνιος',
+                'Ιούλιος','Αύγουστος','Σεπτέμβριος','Οκτώβριος','Νοέμβριος','Δεκέμβριος'][i] }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <select name="year" class="form-select form-select-sm">
+          {% for y in range(today.year-2, today.year+2) %}
+          <option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Εμφάνιση</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Summary cards -->
+{% if records %}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-warning"><i class="bi bi-people"></i></div>
+      <div class="stat-value">{{ records|length }}</div>
+      <div class="stat-label">Εργαζόμενοι</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-success"><i class="bi bi-cash"></i></div>
+      <div class="stat-value">{{ '{:,.0f}'.format(records|sum(attribute='gross_salary')|float) }} €</div>
+      <div class="stat-label">Σύνολο Μικτά</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-primary"><i class="bi bi-wallet2"></i></div>
+      <div class="stat-value">{{ '{:,.0f}'.format(records|sum(attribute='net_salary')|float) }} €</div>
+      <div class="stat-label">Σύνολο Καθαρά</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon text-danger"><i class="bi bi-building"></i></div>
+      <div class="stat-value">{{ '{:,.0f}'.format(records|sum(attribute='total_employer_cost')|float) }} €</div>
+      <div class="stat-label">Κόστος Εργοδότη</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Table -->
+<div class="card card-dark">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-dark table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Εργαζόμενος</th>
+            <th class="text-end">Μικτά €</th>
+            <th class="text-end">ΙΚΑ Εργαζ.</th>
+            <th class="text-end">Φόρος</th>
+            <th class="text-end">Καθαρά €</th>
+            <th class="text-end">Κόστος Εργοδ.</th>
+            <th>Κατάσταση</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in records %}
+          <tr>
+            <td>
+              <strong>{{ r.employee.full_name if r.employee else '—' }}</strong>
+              <div class="text-muted small">{{ r.days_worked }} ημέρες εργ. / {{ r.days_absent }} απουσίας</div>
+            </td>
+            <td class="text-end">{{ '%.2f'|format(r.gross_salary|float) }} €</td>
+            <td class="text-end text-muted small">{{ '%.2f'|format(r.ika_employee|float) }} €</td>
+            <td class="text-end text-muted small">{{ '%.2f'|format(r.tax_withheld|float) }} €</td>
+            <td class="text-end fw-bold text-success">{{ '%.2f'|format(r.net_salary|float) }} €</td>
+            <td class="text-end text-danger small">{{ '%.2f'|format(r.total_employer_cost) }} €</td>
+            <td>
+              <span class="badge bg-{{ r.status_color }}">
+                {{ {'draft':'Πρόχειρο','approved':'Εγκεκριμένο','paid':'Πληρωμένο'}.get(r.status, r.status) }}
+              </span>
+            </td>
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-primary" title="Επεξεργασία"
+                        data-bs-toggle="modal" data-bs-target="#modalEdit{{ r.id }}">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                {% if r.status == 'draft' %}
+                <form method="post" action="{{ url_for('payroll.approve', id=r.id) }}" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-outline-success" title="Έγκριση">
+                    <i class="bi bi-check-lg"></i>
+                  </button>
+                </form>
+                {% elif r.status == 'approved' %}
+                <form method="post" action="{{ url_for('payroll.mark_paid', id=r.id) }}" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-outline-warning text-warning" title="Σήμανση Πληρωμένο">
+                    <i class="bi bi-cash"></i>
+                  </button>
+                </form>
+                {% endif %}
+                <form method="post" action="{{ url_for('payroll.delete', id=r.id) }}" class="d-inline"
+                      onsubmit="return confirm('Διαγραφή εγγραφής μισθοδοσίας;')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-outline-danger" title="Διαγραφή">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" class="text-center text-muted py-5">
+              <i class="bi bi-cash-coin fs-2 d-block mb-2 opacity-25"></i>
+              Δεν υπάρχουν εγγραφές για αυτή την περίοδο.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── MODALS ── -->
+
+<!-- Generate Payroll -->
+<div class="modal fade" id="modalGenerate" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-2 text-warning"></i>Δημιουργία Μισθοδοσίας</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('payroll.generate') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label">Μήνας</label>
+              <select name="month" class="form-select bg-dark text-white border-secondary">
+                {% for i in range(1,13) %}
+                <option value="{{ i }}" {% if i==month %}selected{% endif %}>
+                  {{ ['','Ιανουάριος','Φεβρουάριος','Μάρτιος','Απρίλιος','Μάιος','Ιούνιος',
+                      'Ιούλιος','Αύγουστος','Σεπτέμβριος','Οκτώβριος','Νοέμβριος','Δεκέμβριος'][i] }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Έτος</label>
+              <select name="year" class="form-select bg-dark text-white border-secondary">
+                {% for y in range(today.year-1, today.year+2) %}
+                <option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <p class="text-muted small mb-2">Επιλέξτε εργαζόμενους:</p>
+          <div class="list-group list-group-flush" style="max-height:300px;overflow-y:auto">
+            {% for emp in employees %}
+            <label class="list-group-item list-group-item-action bg-dark text-white border-secondary">
+              <input type="checkbox" name="employee_ids" value="{{ emp.id }}" class="form-check-input me-2">
+              {{ emp.full_name }}
+              {% if emp.basic_salary %}
+              <span class="text-muted small ms-2">{{ '%.0f'|format(emp.basic_salary|float) }} €/μήνα</span>
+              {% endif %}
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-gold">Δημιουργία</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modals -->
+{% for r in records %}
+<div class="modal fade" id="modalEdit{{ r.id }}" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Επεξεργασία: {{ r.employee.full_name if r.employee else '' }}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('payroll.edit', id=r.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">Μικτές Αποδοχές €</label>
+              <input type="number" step="0.01" name="gross_salary" class="form-control bg-dark text-white border-secondary" value="{{ r.gross_salary }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">ΙΚΑ Εργαζόμενου % ({{ r.ika_employee_rate }})</label>
+              <input type="number" step="0.01" name="ika_employee_rate" class="form-control bg-dark text-white border-secondary" value="{{ r.ika_employee_rate }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">ΙΚΑ Εργοδότη % ({{ r.ika_employer_rate }})</label>
+              <input type="number" step="0.01" name="ika_employer_rate" class="form-control bg-dark text-white border-secondary" value="{{ r.ika_employer_rate }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Φόρος €</label>
+              <input type="number" step="0.01" name="tax_withheld" class="form-control bg-dark text-white border-secondary" value="{{ r.tax_withheld }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Άλλες Κρατήσεις €</label>
+              <input type="number" step="0.01" name="other_deductions" class="form-control bg-dark text-white border-secondary" value="{{ r.other_deductions }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Ημέρες Εργασίας</label>
+              <input type="number" name="days_worked" class="form-control bg-dark text-white border-secondary" value="{{ r.days_worked }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Ημέρες Απουσίας</label>
+              <input type="number" name="days_absent" class="form-control bg-dark text-white border-secondary" value="{{ r.days_absent }}">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Σημειώσεις</label>
+              <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="2">{{ r.notes or '' }}</textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Άκυρο</button>
+          <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

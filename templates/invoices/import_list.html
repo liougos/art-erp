@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Εισαγωγή Λίστας Λογιστή — ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('invoices.index') }}">Τιμολόγια</a></li>
+<li class="breadcrumb-item active">Εισαγωγή Λίστας</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h1 class="page-title"><i class="bi bi-file-earmark-spreadsheet me-2 text-gold"></i>Εισαγωγή Λίστας Λογιστή</h1>
+    <p class="page-subtitle text-muted">Μαζική εισαγωγή τιμολογίων εξόδων από Excel / CSV</p>
+  </div>
+  <a href="{{ url_for('invoices.index') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Πίσω
+  </a>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card shadow-sm">
+      <div class="card-header"><i class="bi bi-upload me-2"></i>Επιλογή Αρχείου</div>
+      <div class="card-body">
+        <form method="POST" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="upload-zone mb-3" id="importZone" style="cursor:pointer">
+            <i class="bi bi-file-earmark-spreadsheet fs-1 d-block mb-2 text-success"></i>
+            <div class="fw-semibold mb-1">Σύρετε Excel ή CSV εδώ</div>
+            <div class="text-muted small mb-2">ή κάντε κλικ για επιλογή</div>
+            <div class="text-muted" style="font-size:11px">.xlsx / .xls / .csv</div>
+            <input type="file" id="list_file" name="list_file" accept=".xlsx,.xls,.csv" class="d-none" required>
+          </div>
+          <div id="fileInfo" class="alert alert-info d-none py-2"></div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-eye me-1"></i>Ανάγνωση & Προεπισκόπηση
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card shadow-sm">
+      <div class="card-header"><i class="bi bi-info-circle me-2"></i>Αναμενόμενη Μορφή</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">Το αρχείο πρέπει να έχει επικεφαλίδες στην πρώτη γραμμή. Αναγνωρίζονται αυτόματα οι εξής στήλες:</p>
+        <table class="table table-sm table-bordered mb-3">
+          <thead class="table-dark">
+            <tr><th>Στήλη</th><th>Αποδεκτά Ονόματα</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="badge bg-danger">Απαραίτητο</span> Εκδότης</td><td class="small text-muted">Εκδότης, Επωνυμία, Issuer, Supplier</td></tr>
+            <tr><td>Ημερομηνία</td><td class="small text-muted">Ημερομηνία, Date, Ημ/νια</td></tr>
+            <tr><td>Αρ. Τιμολογίου</td><td class="small text-muted">Αριθμός, Αρ.Τιμ., Number</td></tr>
+            <tr><td>ΑΦΜ Εκδότη</td><td class="small text-muted">ΑΦΜ, AFM, Tax_ID</td></tr>
+            <tr><td>Καθαρό Ποσό</td><td class="small text-muted">Καθαρό, Net, Αξία</td></tr>
+            <tr><td>ΦΠΑ %</td><td class="small text-muted">ΦΠΑ%, ΦΠΑ, VAT_Rate</td></tr>
+            <tr><td>Σύνολο</td><td class="small text-muted">Σύνολο, Total, Πληρωτέο</td></tr>
+            <tr><td>Κατηγορία</td><td class="small text-muted">Κατηγορία, Category</td></tr>
+          </tbody>
+        </table>
+        <div class="alert alert-warning py-2 small mb-0">
+          <i class="bi bi-lightbulb me-1"></i>Αν το αρχείο έχει διαφορετικές επικεφαλίδες, μπορείτε να τις μετονομάσετε στο Excel πριν ανεβάσετε.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const zone = document.getElementById('importZone');
+const input = document.getElementById('list_file');
+const info  = document.getElementById('fileInfo');
+
+zone.addEventListener('click', () => input.click());
+zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('dragover'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) { const dt = new DataTransfer(); dt.items.add(e.dataTransfer.files[0]); input.files = dt.files; showInfo(e.dataTransfer.files[0]); }
+});
+input.addEventListener('change', e => e.target.files[0] && showInfo(e.target.files[0]));
+
+function showInfo(f) {
+  info.classList.remove('d-none');
+  info.innerHTML = `<i class="bi bi-file-earmark-check me-2"></i><strong>${f.name}</strong> — ${(f.size/1024).toFixed(0)} KB`;
+}
+</script>
+{% endblock %}

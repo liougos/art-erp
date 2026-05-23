@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Έργα — ERP{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Έργα</li>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-building me-2 text-primary"></i>Έργα</h1>
+    <p class="page-subtitle">Παρακολούθηση όλων των έργων συντήρησης</p>
+  </div>
+  <a href="{{ url_for('projects.new') }}" class="btn btn-gold"><i class="bi bi-plus-lg me-1"></i>Νέο Έργο</a>
+</div>
+
+<!-- Status pills -->
+<div class="stat-row">
+  <a href="{{ url_for('projects.index') }}" class="stat-pill {% if not status %}active{% endif %}">Όλα</a>
+  {% for s, l in [('planning','Σχεδιασμός'),('active','Ενεργά'),('paused','Σε Παύση'),('completed','Ολοκληρώθηκαν'),('cancelled','Ακυρωμένα')] %}
+  <a href="{{ url_for('projects.index', status=s) }}" class="stat-pill {% if status==s %}active{% endif %}">{{ l }}</a>
+  {% endfor %}
+</div>
+
+<!-- Search -->
+<div class="toolbar">
+  <div class="search-box">
+    <i class="bi bi-search"></i>
+    <form method="GET">
+      <input type="hidden" name="status" value="{{ status }}">
+      <input name="q" class="form-control form-control-sm" placeholder="Αναζήτηση τίτλου, κωδικού…" value="{{ q }}">
+    </form>
+  </div>
+</div>
+
+<div class="row g-3">
+  {% for p in projects %}
+  <div class="col-lg-6 col-xl-4">
+    <div class="card h-100" style="border-left: 4px solid {% if p.status=='active' %}#16a34a{% elif p.status=='planning' %}#0284c7{% elif p.status=='completed' %}#64748b{% elif p.status=='paused' %}#d97706{% else %}#dc2626{% endif %}">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <span class="badge bg-dark text-white" style="font-family:monospace">{{ p.code }}</span>
+          <span class="badge status-{{ p.status }}">{{ p.status_label }}</span>
+        </div>
+        <h6 class="fw-bold mb-1">
+          <a href="{{ url_for('projects.detail', id=p.id) }}" class="text-decoration-none text-dark">{{ p.title[:70] }}</a>
+        </h6>
+        <div class="text-muted small mb-3">
+          <i class="bi bi-geo-alt me-1"></i>{{ p.location or '—' }}
+          {% if p.conservation_type %}· {{ p.conservation_type }}{% endif %}
+        </div>
+
+        <!-- Progress -->
+        <div class="mb-2">
+          <div class="d-flex justify-content-between mb-1">
+            <small class="text-muted">Πρόοδος</small>
+            <small class="fw-semibold">{{ p.progress_pct }}%</small>
+          </div>
+          <div class="progress"><div class="progress-bar {% if p.progress_pct >= 80 %}bg-success{% elif p.progress_pct >= 40 %}bg-primary{% else %}bg-warning{% endif %}" style="width:{{ p.progress_pct }}%"></div></div>
+        </div>
+
+        <!-- Budget -->
+        {% if p.total_budget %}
+        <div class="mb-2">
+          <div class="d-flex justify-content-between mb-1">
+            <small class="text-muted">Προϋπολογισμός</small>
+            <small class="fw-semibold {% if p.budget_used_pct > 90 %}text-danger{% elif p.budget_used_pct > 70 %}text-warning{% endif %}">{{ p.budget_used_pct }}%</small>
+          </div>
+          <div class="progress"><div class="progress-bar {% if p.budget_used_pct > 90 %}bg-danger{% elif p.budget_used_pct > 70 %}bg-warning{% else %}bg-info{% endif %}" style="width:{{ [p.budget_used_pct, 100]|min }}%"></div></div>
+          <small class="text-muted">{{ '{:,.0f}'.format(p.spent_budget|float) }}€ / {{ '{:,.0f}'.format(p.total_budget|float) }}€</small>
+        </div>
+        {% endif %}
+
+        <!-- Dates -->
+        <div class="d-flex gap-3 small text-muted mt-2">
+          {% if p.start_date %}<span><i class="bi bi-calendar-check me-1"></i>{{ p.start_date.strftime('%d/%m/%Y') }}</span>{% endif %}
+          {% if p.end_date %}
+          {% set dr = p.days_remaining %}
+          <span class="{% if dr is not none and dr < 0 %}text-danger{% elif dr is not none and dr <= 30 %}text-warning{% endif %}">
+            <i class="bi bi-calendar-x me-1"></i>{{ p.end_date.strftime('%d/%m/%Y') }}
+            {% if dr is not none and dr >= 0 %}<strong>({{ dr }}η)</strong>{% elif dr is not none %}<strong class="text-danger">(Έληξε)</strong>{% endif %}
+          </span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="card-footer bg-transparent d-flex gap-2">
+        <a href="{{ url_for('projects.detail', id=p.id) }}" class="btn btn-sm btn-primary flex-fill"><i class="bi bi-eye me-1"></i>Λεπτομέρειες</a>
+        <a href="{{ url_for('projects.edit', id=p.id) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12">
+    <div class="empty-state">
+      <i class="bi bi-building-x d-block"></i>
+      <h5>Δεν υπάρχουν έργα</h5>
+      <a href="{{ url_for('projects.new') }}" class="btn btn-primary mt-2">Δημιουργία Πρώτου Έργου</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

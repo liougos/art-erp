@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Εκκρεμείς Αναφορές Υπεργολάβων{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('subcontractors.index') }}">Υπεργολάβοι</a></li>
+<li class="breadcrumb-item active">Εκκρεμείς Αναφορές</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h2 class="page-title mb-0"><i class="bi bi-journal-check me-2 text-warning"></i>Εκκρεμείς Αναφορές Εργασίας</h2>
+</div>
+
+<div class="card card-dark">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-dark table-hover mb-0">
+        <thead><tr><th>Ημ/νία</th><th>Υπεργολάβος</th><th>Σύμβαση / Έργο</th><th>Περιγραφή</th><th class="text-end">Εργ.</th><th class="text-end">Ώρες</th><th class="text-end">%</th><th></th></tr></thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <td>{{ log.log_date.strftime('%d/%m/%Y') }}</td>
+            <td><strong>{{ log.contract.subcontractor.company_name if log.contract and log.contract.subcontractor else '—' }}</strong></td>
+            <td class="small text-muted">
+              {{ log.contract.title[:30] if log.contract else '—' }}
+              {% if log.contract and log.contract.project %}<br><span class="text-warning">[{{ log.contract.project.code }}]</span>{% endif %}
+            </td>
+            <td class="small">{{ log.work_description[:80] }}</td>
+            <td class="text-end">{{ log.workers_count }}</td>
+            <td class="text-end">{{ log.hours_worked }}h</td>
+            <td class="text-end">{{ log.completion_pct }}%</td>
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                <form method="post" action="{{ url_for('subcontractors.approve_worklog', id=log.id) }}" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-outline-success" title="Έγκριση"><i class="bi bi-check-lg"></i></button>
+                </form>
+                <form method="post" action="{{ url_for('subcontractors.reject_worklog', id=log.id) }}" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-outline-danger" title="Απόρριψη"><i class="bi bi-x-lg"></i></button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="text-center text-muted py-5">
+            <i class="bi bi-check-circle fs-2 d-block mb-2 opacity-25 text-success"></i>
+            Δεν υπάρχουν εκκρεμείς αναφορές.
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

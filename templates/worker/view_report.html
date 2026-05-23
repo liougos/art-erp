@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Αναφορά {{ report.report_date.strftime('%d/%m/%Y') }} — ERP{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('worker.dashboard') }}">Πύλη Εργαζομένου</a></li>
+<li class="breadcrumb-item active">Αναφορά {{ report.report_date.strftime('%d/%m/%Y') }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title"><i class="bi bi-journal-text me-2 text-primary"></i>Αναφορά Προόδου</h1>
+    <p class="page-subtitle">{{ report.project.code }} · {{ report.report_date.strftime('%d/%m/%Y') }}</p>
+  </div>
+  <span class="badge fs-6 {% if report.status=='approved' %}status-active{% elif report.status=='rejected' %}bg-danger{% else %}status-pending{% endif %}">
+    {{ {'pending':'Εκκρεμεί','approved':'Εγκρίθηκε','rejected':'Απορρίφθηκε'}.get(report.status, report.status) }}
+  </span>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-info-circle"></i> Στοιχεία Αναφοράς</div>
+      <div class="card-body">
+        <dl class="row mb-0" style="font-size:14px">
+          <dt class="col-4 text-muted">Υπάλληλος</dt><dd class="col-8">{{ report.employee.full_name }}</dd>
+          <dt class="col-4 text-muted">Έργο</dt><dd class="col-8 fw-semibold">{{ report.project.code }} — {{ report.project.title }}</dd>
+          <dt class="col-4 text-muted">Ημερομηνία</dt><dd class="col-8">{{ report.report_date.strftime('%d/%m/%Y') }}</dd>
+          <dt class="col-4 text-muted">Ώρες</dt><dd class="col-8">{{ report.hours_worked }}h</dd>
+          <dt class="col-4 text-muted">Παρόντες</dt><dd class="col-8">{{ report.workers_present }} άτομα</dd>
+          {% if report.weather %}<dt class="col-4 text-muted">Καιρός</dt><dd class="col-8">{{ report.weather }}</dd>{% endif %}
+          {% if report.progress_pct is not none %}<dt class="col-4 text-muted">Πρόοδος</dt><dd class="col-8"><strong>{{ report.progress_pct }}%</strong></dd>{% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-tools"></i> Εργασίες που εκτελέστηκαν</div>
+      <div class="card-body" style="white-space:pre-wrap">{{ report.work_done }}</div>
+    </div>
+
+    {% if report.materials_used %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-boxes"></i> Υλικά που χρησιμοποιήθηκαν</div>
+      <div class="card-body" style="white-space:pre-wrap">{{ report.materials_used }}</div>
+    </div>
+    {% endif %}
+
+    {% if report.problems %}
+    <div class="card mb-3 border-warning">
+      <div class="card-header bg-warning bg-opacity-10"><i class="bi bi-exclamation-triangle text-warning"></i> Προβλήματα / Παρατηρήσεις</div>
+      <div class="card-body" style="white-space:pre-wrap">{{ report.problems }}</div>
+    </div>
+    {% endif %}
+
+    {% if report.next_steps %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-arrow-right-circle"></i> Επόμενα Βήματα</div>
+      <div class="card-body" style="white-space:pre-wrap">{{ report.next_steps }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Review panel -->
+  <div class="col-lg-4">
+    {% if report.status != 'pending' %}
+    <div class="card mb-3 {% if report.status=='approved' %}border-success{% else %}border-danger{% endif %}">
+      <div class="card-header {% if report.status=='approved' %}bg-success bg-opacity-10{% else %}bg-danger bg-opacity-10{% endif %}">
+        <i class="bi bi-{% if report.status=='approved' %}check-circle text-success{% else %}x-circle text-danger{% endif %}"></i>
+        {{ 'Εγκρίθηκε' if report.status=='approved' else 'Απορρίφθηκε' }}
+      </div>
+      <div class="card-body" style="font-size:13px">
+        {% if report.reviewer %}<div class="mb-1"><strong>Από:</strong> {{ report.reviewer.full_name or report.reviewer.username }}</div>{% endif %}
+        {% if report.reviewed_at %}<div class="mb-1"><strong>Ημ/νία:</strong> {{ report.reviewed_at.strftime('%d/%m/%Y %H:%M') }}</div>{% endif %}
+        {% if report.reviewer_notes %}<div class="mt-2 p-2 bg-light rounded">{{ report.reviewer_notes }}</div>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if current_user.role in ('admin', 'manager') and report.status == 'pending' %}
+    <div class="card">
+      <div class="card-header"><i class="bi bi-clipboard-check"></i> Αξιολόγηση</div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('worker.review_report', id=report.id) }}">
+          <label class="form-label">Σημειώσεις (προαιρετικό)</label>
+          <textarea name="reviewer_notes" class="form-control mb-3" rows="3"></textarea>
+          <div class="d-grid gap-2">
+            <button type="submit" name="action" value="approve" class="btn btn-success">
+              <i class="bi bi-check2 me-1"></i>Έγκριση
+            </button>
+            <button type="submit" name="action" value="reject" class="btn btn-outline-danger">
+              <i class="bi bi-x me-1"></i>Απόρριψη
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card mt-3">
+      <div class="card-body text-center">
+        <small class="text-muted">Υποβλήθηκε: {{ report.created_at.strftime('%d/%m/%Y %H:%M') }}</small>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
