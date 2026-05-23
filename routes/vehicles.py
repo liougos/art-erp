@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from models import db, Vehicle, MaintenanceRecord, Employee
 
 vehicles_bp = Blueprint('vehicles', __name__)
@@ -12,7 +12,7 @@ def index():
     vehicles = Vehicle.query.order_by(Vehicle.brand, Vehicle.model).all()
     employees = Employee.query.filter_by(status='active').order_by(Employee.last_name).all()
     today = date.today()
-    thirty = today.replace(day=today.day)
+    thirty = today + timedelta(days=30)
 
     alerts = []
     for v in vehicles:

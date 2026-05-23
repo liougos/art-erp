@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template
 from flask_login import login_required
-from sqlalchemy import func
+from sqlalchemy import func, extract
+from dateutil.relativedelta import relativedelta
 from datetime import date, timedelta
 from models import (db, Tender, Project, Invoice, Employee, Vehicle,
                     Equipment, LegalDocument, MaintenanceRecord, Notification)
@@ -48,10 +49,10 @@ def index():
     ).order_by(Vehicle.insurance_expiry).limit(5).all()
 
     # ── Monthly income/expense (12 months) ──────────────────────────────────
-    from sqlalchemy import extract
+    # Use relativedelta for accurate month boundaries (not timedelta * 30)
     monthly_data = []
     for i in range(11, -1, -1):
-        m = today.replace(day=1) - timedelta(days=i * 30)
+        m = today.replace(day=1) - relativedelta(months=i)
         income = db.session.query(func.sum(Invoice.total_amount)).filter(
             Invoice.invoice_type == 'income',
             extract('year', Invoice.invoice_date) == m.year,

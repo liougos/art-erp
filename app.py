@@ -1,8 +1,13 @@
 import os
+import logging
 from flask import Flask, g
 from flask_login import LoginManager, current_user
+from flask_wtf.csrf import CSRFProtect
 from models import db, User, Notification
 from config import Config
+
+logger = logging.getLogger(__name__)
+
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -12,7 +17,10 @@ def create_app(config_class=Config):
 
     db.init_app(app)
 
-    # Make csrf_token() available in all Jinja2 templates
+    # CSRF protection
+    csrf = CSRFProtect(app)
+    # Also expose csrf_token() in Jinja2 (CSRFProtect does this automatically,
+    # but keep the explicit assignment for safety)
     from flask_wtf.csrf import generate_csrf
     app.jinja_env.globals['csrf_token'] = generate_csrf
 
@@ -24,7 +32,8 @@ def create_app(config_class=Config):
 
     @login_manager.user_loader
     def load_user(user_id):
-        return User.query.get(int(user_id))
+        # Use Session.get() — Query.get() is deprecated in SQLAlchemy 2.0
+        return db.session.get(User, int(user_id))
 
     # Inject notification count into all templates
     @app.context_processor
@@ -95,6 +104,7 @@ def create_app(config_class=Config):
     # Notification mark-as-read
     from flask import request as _req, jsonify as _jsonify
     from flask_login import login_required as _login_required
+
     @app.route('/notifications/read', methods=['POST'])
     @_login_required
     def mark_notifications_read():
@@ -131,21 +141,27 @@ def _run_migrations():
         try:
             with db.engine.begin() as conn:   # own transaction per statement
                 conn.execute(text(sql))
-        except Exception:
-            pass  # column already exists — safe to ignore
+        except Exception as e:
+            # Column already exists — safe to ignore. Log at DEBUG for visibility.
+            logger.debug('Migration skipped (likely already applied): %s — %s', sql[:60], e)
 
 
 def _create_default_admin():
-    if not User.query.filter_by(username='admin').first():
-        admin = User(
-            username='admin',
-            email='admin@artrestoration.gr',
-            full_name='Χρήστος Λιούγκος',
-            role='admin',
-        )
-        admin.set_password('ArtRestore2026!')
-        db.session.add(admin)
-        db.session.commit()
+    try:
+        if not User.query.filter_by(username='admin').first():
+            admin = User(
+                username='admin',
+                email='admin@artrestoration.gr',
+                full_name='Χρήστος Λιούγκος',
+                role='admin',
+            )
+            admin.set_password('ArtRestore2026!')
+            db.session.add(admin)
+            db.session.commit()
+    except Exception as e:
+        # Race condition between gunicorn workers on first deploy — safe to ignore
+        db.session.rollback()
+        logger.debug('Admin creation skipped (likely race condition): %s', e)
 
 
 if __name__ == '__main__':

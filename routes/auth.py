@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
+from urllib.parse import urlparse, urljoin
 from models import db, User, Employee
 
 auth_bp = Blueprint('auth', __name__)
@@ -17,7 +18,13 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and user.check_password(password) and user.is_active:
             login_user(user, remember=True)
-            next_page = request.args.get('next')
+            next_page = request.args.get('next', '')
+            # Validate next_page to prevent open redirect attacks
+            if next_page:
+                ref = urlparse(request.host_url)
+                target = urlparse(urljoin(request.host_url, next_page))
+                if not (target.scheme in ('http', 'https') and ref.netloc == target.netloc):
+                    next_page = ''
             if next_page:
                 return redirect(next_page)
             if user.role == 'worker':

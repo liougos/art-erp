@@ -20,7 +20,7 @@ def _project_pl(project):
 
     # Labor estimate: team member daily_rate * approved daily report count
     labor_cost = 0
-    for tm in project.team_members:
+    for tm in project.team:
         if tm.daily_rate:
             report_count = DailyReport.query.filter_by(
                 project_id=project.id, employee_id=tm.employee_id, status='approved'

@@ -95,7 +95,12 @@ def convert_to_project(id):
         flash('Δεν έχετε δικαίωμα.', 'danger')
         return redirect(url_for('quotes.detail', id=id))
     quote = Quote.query.get_or_404(id)
+    # Generate next project code (same logic as projects.new)
+    year = date.today().year
+    count = Project.query.filter(Project.code.like(f'AR-{year}-%')).count()
+    next_code = f'AR-{year}-{count + 1:03d}'
     proj = Project(
+        code=next_code,
         title=quote.title,
         client_name=quote.client_name,
         client_email=quote.client_email,

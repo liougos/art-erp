@@ -344,15 +344,18 @@ def new_material_request(id):
     db.session.add(req)
     db.session.commit()
 
-    # Notify admin/manager
+    # Notify all admin/manager users
     from models import Notification
-    n = Notification(
-        title=f'Αίτηση: {req.title}',
-        message=f'{current_user.full_name} ζητά {req.request_type} για έργο #{id}. Επείγον: {req.urgency_label}',
-        link=f'/projects/{id}#requests',
-        icon='bi-box-seam',
-    )
-    db.session.add(n)
+    admins = User.query.filter(User.role.in_(['admin', 'manager']), User.is_active == True).all()
+    for admin in admins:
+        n = Notification(
+            user_id=admin.id,
+            title=f'Αίτηση: {req.title}',
+            message=f'{current_user.full_name} ζητά {req.request_type} για έργο #{id}. Επείγον: {req.urgency_label}',
+            link=f'/projects/{id}#requests',
+            icon='bi-box-seam',
+        )
+        db.session.add(n)
     db.session.commit()
     flash('Η αίτηση υποβλήθηκε.', 'success')
     return redirect(url_for('projects.detail', id=id) + '#requests')

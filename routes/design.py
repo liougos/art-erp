@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_required, current_user
 from datetime import datetime, date
 from models import db, DesignProject, DesignRevision, Project, Employee, Subcontractor, User
@@ -186,7 +186,7 @@ def new_revision(id):
         # Handle file upload
         f = request.files.get('revision_file')
         if f and f.filename:
-            upload_dir = os.path.join('static', 'uploads', 'design', str(dp.id))
+            upload_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'design', str(dp.id))
             os.makedirs(upload_dir, exist_ok=True)
             safe_name = f.filename.replace(' ', '_')
             fpath = os.path.join(upload_dir, safe_name)

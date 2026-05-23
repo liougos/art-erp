@@ -165,14 +165,17 @@ def upload():
 
         # Notify admin if payment is on credit
         if payment_method.lower() in ('πίστωση', 'credit', 'πιστωση', 'επί πιστώσει'):
-            from models import Notification
-            n = Notification(
-                title=f'Πληρωμή επί πιστώσει — {store_name}',
-                message=f'Τιμολόγιο {total:.2f}€ από {store_name} — απαιτείται εξόφληση.',
-                link='/invoices/',
-                icon='bi-credit-card',
-            )
-            db.session.add(n)
+            from models import Notification, User as _User
+            admins = _User.query.filter(_User.role.in_(['admin', 'manager']), _User.is_active == True).all()
+            for admin in admins:
+                n = Notification(
+                    user_id=admin.id,
+                    title=f'Πληρωμή επί πιστώσει — {store_name}',
+                    message=f'Τιμολόγιο {total:.2f}€ από {store_name} — απαιτείται εξόφληση.',
+                    link='/invoices/',
+                    icon='bi-credit-card',
+                )
+                db.session.add(n)
             db.session.commit()
             flash(f'Τιμολόγιο καταχωρήθηκε. Ειδοποίηση για πληρωμή πίστωσης στάλθηκε.', 'warning')
         else:
