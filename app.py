@@ -6,7 +6,10 @@ from flask_wtf.csrf import CSRFProtect
 from models import db, User, Notification
 from config import Config
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+APP_VERSION = '2.1.0'   # bump this to force Railway to rebuild & confirm version in logs
 
 
 def create_app(config_class=Config):
@@ -122,6 +125,7 @@ def create_app(config_class=Config):
         return _jsonify({'ok': True})
 
     with app.app_context():
+        logger.info('ART ERP v%s — starting up', APP_VERSION)
         db.create_all()
         _run_migrations()
         _create_default_admin()
