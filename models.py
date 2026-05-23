@@ -1233,7 +1233,7 @@ class SubcontractorContract(db.Model):
 
     @property
     def total_paid(self):
-        return sum(float(i.amount_net or 0) for i in self.invoices if i.payment_status == 'paid')
+        return sum(float(i.amount_net or 0) for i in self.invoices if i.status == 'paid')
 
     @property
     def balance(self):
