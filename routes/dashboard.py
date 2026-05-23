@@ -66,7 +66,10 @@ def index():
         monthly_data.append({'month': m.strftime('%b %Y'), 'income': float(income), 'expense': float(expense)})
 
     # ── Projects by status ──────────────────────────────────────────────────
-    project_statuses = db.session.query(Project.status, func.count(Project.id)).group_by(Project.status).all()
+    project_statuses = [
+        [s, c]
+        for s, c in db.session.query(Project.status, func.count(Project.id)).group_by(Project.status).all()
+    ]
 
     # ── Recent activity ─────────────────────────────────────────────────────
     recent_projects = Project.query.order_by(Project.updated_at.desc()).limit(5).all()

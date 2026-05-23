@@ -51,12 +51,15 @@ def index():
         monthly.append({'month': m, 'income': float(inc), 'expense': float(exp)})
 
     # Expenses by category
-    cat_data = db.session.query(
-        AccountingEntry.category, func.sum(AccountingEntry.total_amount)
-    ).filter(
-        AccountingEntry.period_year == year,
-        AccountingEntry.entry_type == 'expense'
-    ).group_by(AccountingEntry.category).all()
+    cat_data = [
+        [cat, float(total or 0)]
+        for cat, total in db.session.query(
+            AccountingEntry.category, func.sum(AccountingEntry.total_amount)
+        ).filter(
+            AccountingEntry.period_year == year,
+            AccountingEntry.entry_type == 'expense'
+        ).group_by(AccountingEntry.category).all()
+    ]
 
     return render_template('accounting/index.html',
         entries=entries, projects=projects,
