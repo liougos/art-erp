@@ -6,7 +6,7 @@ from werkzeug.utils import secure_filename
 from models import (db, Subcontractor, SubcontractorContract, SubcontractorWorkLog,
                     SubcontractorInvoice, SubcontractorDocument, SubcontractorPersonnel,
                     SubcontractorMeasurement, ProjectSharedDocument,
-                    Project, ProjectPhase, Employee, User)
+                    Project, ProjectPhase, Document, Employee, User)
 
 subcontractors_bp = Blueprint('subcontractors', __name__)
 
@@ -101,17 +101,22 @@ def detail(id):
         for c in contracts
     }
 
-    # Documents summary
+    # Company credential documents (SubcontractorDocument)
     all_docs = sub.documents.all()
     docs_expired  = sum(1 for d in all_docs if d.expiry_status == 'expired')
     docs_expiring = sum(1 for d in all_docs if d.expiry_status == 'expiring')
     docs_alert = docs_expired + docs_expiring
 
+    # General documents linked to this subcontractor (Document model with subcontractor_id)
+    linked_docs = Document.query.filter_by(subcontractor_id=sub.id)\
+                  .order_by(Document.created_at.desc()).all()
+
     return render_template('subcontractors/detail.html',
                            sub=sub, contracts=contracts, projects=projects,
                            specialties=SPECIALTIES, today=date.today(),
                            all_logs=all_logs, meas_pending=meas_pending,
-                           docs_alert=docs_alert, docs_count=len(all_docs))
+                           docs_alert=docs_alert, docs_count=len(all_docs),
+                           linked_docs=linked_docs)
 
 
 @subcontractors_bp.route('/<int:id>/edit', methods=['POST'])

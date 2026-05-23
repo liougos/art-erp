@@ -52,7 +52,7 @@
   <div class="table-responsive">
     <table class="table table-hover mb-0">
       <thead><tr>
-        <th>Τίτλος</th><th>Τύπος</th><th>Έργο</th><th>Συμβαλλόμενοι</th>
+        <th>Τίτλος</th><th>Τύπος</th><th>Έργο / Υπεργολάβος</th><th>Συμβαλλόμενοι</th>
         <th>Υπογραφή</th><th>Λήξη</th><th>Κατάσταση</th><th></th>
       </tr></thead>
       <tbody>
@@ -64,7 +64,11 @@
             {% if d.tags %}<div>{% for tag in d.tags.split(',') %}<span class="badge bg-light text-dark border me-1" style="font-size:10px">{{ tag.strip() }}</span>{% endfor %}</div>{% endif %}
           </td>
           <td><small class="badge bg-light text-dark border">{{ d.doc_type or '—' }}</small></td>
-          <td><small>{{ d.project.code if d.project else '—' }}</small></td>
+          <td>
+            {% if d.project %}<small class="text-warning">[{{ d.project.code }}]</small>{% endif %}
+            {% if d.subcontractor %}<br><small class="text-info"><i class="bi bi-person-gear me-1"></i>{{ d.subcontractor.company_name[:25] }}</small>{% endif %}
+            {% if not d.project and not d.subcontractor %}<small class="text-muted">—</small>{% endif %}
+          </td>
           <td class="text-truncate" style="max-width:140px"><small class="text-muted">{{ d.parties[:50] if d.parties else '—' }}</small></td>
           <td><small>{{ d.signing_date.strftime('%d/%m/%Y') if d.signing_date else '—' }}</small></td>
           <td>
@@ -120,7 +124,14 @@
             <label class="form-label">Συνδεδεμένο Έργο</label>
             <select name="project_id" class="form-select">
               <option value="">— Κανένα —</option>
-              {% for p in projects %}<option value="{{ p.id }}">{{ p.code }}</option>{% endfor %}
+              {% for p in projects %}<option value="{{ p.id }}">{{ p.code }} — {{ p.title[:25] }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label"><i class="bi bi-person-gear me-1"></i>Υπεργολάβος</label>
+            <select name="subcontractor_id" class="form-select">
+              <option value="">— Κανένας —</option>
+              {% for s in subcontractors %}<option value="{{ s.id }}">{{ s.company_name }}</option>{% endfor %}
             </select>
           </div>
           <div class="col-md-4">

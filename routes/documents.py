@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from datetime import datetime, date
 from werkzeug.utils import secure_filename
-from models import db, Document, Project, Tender
+from models import db, Document, Project, Tender, Subcontractor
 
 documents_bp = Blueprint('documents', __name__)
 
@@ -26,17 +26,23 @@ def index():
     if project_id: query = query.filter_by(project_id=int(project_id))
     if q: query = query.filter(Document.title.ilike(f'%{q}%'))
 
+    sub_id = request.args.get('subcontractor_id', '')
+    if sub_id:
+        query = query.filter_by(subcontractor_id=int(sub_id))
+
     docs = query.order_by(Document.created_at.desc()).all()
-    projects = Project.query.order_by(Project.code).all()
-    tenders = Tender.query.order_by(Tender.title).all()
+    projects       = Project.query.order_by(Project.code).all()
+    tenders        = Tender.query.order_by(Tender.title).all()
+    subcontractors = Subcontractor.query.filter_by(is_active=True).order_by(Subcontractor.company_name).all()
 
     today = date.today()
     expiring_soon = [d for d in docs if d.expiry_date and 0 <= (d.expiry_date - today).days <= 30]
 
     return render_template('documents/index.html', docs=docs, projects=projects,
-                           tenders=tenders, expiring_soon=expiring_soon,
+                           tenders=tenders, subcontractors=subcontractors,
+                           expiring_soon=expiring_soon,
                            doc_types=DOC_TYPES, doc_type=doc_type, status=status,
-                           project_id=project_id, q=q)
+                           project_id=project_id, subcontractor_id=sub_id, q=q)
 
 
 @documents_bp.route('/upload', methods=['POST'])
@@ -58,6 +64,7 @@ def upload():
         doc_type=request.form.get('doc_type', '').strip(),
         project_id=request.form.get('project_id') or None,
         tender_id=request.form.get('tender_id') or None,
+        subcontractor_id=request.form.get('subcontractor_id') or None,
         version=request.form.get('version', '1.0').strip(),
         parties=request.form.get('parties', '').strip(),
         status=request.form.get('status', 'active'),

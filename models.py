@@ -273,8 +273,9 @@ class Document(db.Model):
     title = db.Column(db.String(600), nullable=False)
     doc_type = db.Column(db.String(100))
     # contract | permit | certificate | report | study | protocol | insurance | other
-    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'))
-    tender_id = db.Column(db.Integer, db.ForeignKey('tenders.id'))
+    project_id       = db.Column(db.Integer, db.ForeignKey('projects.id'))
+    tender_id        = db.Column(db.Integer, db.ForeignKey('tenders.id'))
+    subcontractor_id = db.Column(db.Integer, db.ForeignKey('subcontractors.id'))
     version = db.Column(db.String(20), default='1.0')
     file_path = db.Column(db.String(600))
     file_name = db.Column(db.String(400))
@@ -287,6 +288,11 @@ class Document(db.Model):
     reminder_days = db.Column(db.Integer, default=30)
     uploaded_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    subcontractor = db.relationship('Subcontractor',
+                                    foreign_keys=[subcontractor_id],
+                                    backref=db.backref('linked_documents', lazy='dynamic'))
+    uploaded_by   = db.relationship('User', foreign_keys=[uploaded_by_id])
 
     @property
     def days_to_expiry(self):

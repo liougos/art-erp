@@ -140,6 +140,7 @@ def _run_migrations():
         "ALTER TABLE employees ADD COLUMN annual_leave_days INTEGER DEFAULT 20",
         "ALTER TABLE employees ADD COLUMN contract_file_path VARCHAR(600)",
         "ALTER TABLE employees ADD COLUMN contract_file_name VARCHAR(400)",
+        "ALTER TABLE documents ADD COLUMN subcontractor_id INTEGER REFERENCES subcontractors(id)",
     ]
     for sql in migrations:
         try:
