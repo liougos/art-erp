@@ -872,3 +872,50 @@ body.bg-dark .page-title,
   color: #e2e2e2 !important;
   border-top-color: #333 !important;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DARK THEME — COMPREHENSIVE TEXT VISIBILITY FIXES
+   Overrides Bootstrap light-theme defaults that cause invisible text
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* text-dark inside cards → use theme text color (not Bootstrap's near-black) */
+.card .text-dark:not(.badge):not(.btn),
+.card-dark .text-dark:not(.badge):not(.btn) {
+  color: #e2e2e2 !important;
+}
+/* links with text-dark inside cards → gold */
+.card a.text-dark,
+.card-dark a.text-dark {
+  color: #c9a84c !important;
+}
+
+/* table-light → override to dark-theme equivalent */
+.table .table-light > td,
+.table .table-light > th,
+.table-light td, .table-light th,
+tr.table-light td, tr.table-light th {
+  background-color: #2a2a2a !important;
+  color: #e2e2e2 !important;
+}
+
+/* bg-light in dark theme → dark surface */
+.bg-light:not(.navbar):not(.nav):not([class*="btn"]) {
+  background-color: #252525 !important;
+  color: #e2e2e2 !important;
+}
+
+/* table-warning in dark theme */
+tr.table-warning td, tr.table-warning th,
+.table-warning td, .table-warning th {
+  background-color: rgba(201,168,76,.2) !important;
+  color: #e8c96a !important;
+}
+
+/* Badges: text-dark on colored badges is intentional — keep it */
+.badge.text-dark { color: #111 !important; }
+
+/* Links that use text-dark globally */
+a.text-dark { color: #c9a84c !important; }
+
+/* --bs-body-color-rgb must match --bs-body-color for text-muted formula */
+:root { --bs-body-color-rgb: 226, 226, 226; }
