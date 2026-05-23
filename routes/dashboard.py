@@ -48,16 +48,19 @@ def index():
     ).order_by(Vehicle.insurance_expiry).limit(5).all()
 
     # ── Monthly income/expense (12 months) ──────────────────────────────────
+    from sqlalchemy import extract
     monthly_data = []
     for i in range(11, -1, -1):
         m = today.replace(day=1) - timedelta(days=i * 30)
         income = db.session.query(func.sum(Invoice.total_amount)).filter(
             Invoice.invoice_type == 'income',
-            func.strftime('%Y-%m', Invoice.invoice_date) == m.strftime('%Y-%m')
+            extract('year', Invoice.invoice_date) == m.year,
+            extract('month', Invoice.invoice_date) == m.month
         ).scalar() or 0
         expense = db.session.query(func.sum(Invoice.total_amount)).filter(
             Invoice.invoice_type == 'expense',
-            func.strftime('%Y-%m', Invoice.invoice_date) == m.strftime('%Y-%m')
+            extract('year', Invoice.invoice_date) == m.year,
+            extract('month', Invoice.invoice_date) == m.month
         ).scalar() or 0
         monthly_data.append({'month': m.strftime('%b %Y'), 'income': float(income), 'expense': float(expense)})
 
