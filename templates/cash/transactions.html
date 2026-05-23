@@ -1,0 +1,426 @@
+{% extends "base.html" %}
+{% block title %}Κινήσεις — {{ acc.name }}{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h2 class="page-title mb-0">
+      <i class="bi bi-bank2 me-2 text-warning"></i>{{ acc.name }}
+      <small class="text-muted fs-6 ms-2">{{ acc.bank_name }}</small>
+    </h2>
+    <div class="page-subtitle">{{ acc.iban or acc.account_number or '' }} — Τραπεζικές Κινήσεις & Συμφωνία</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('cash.index') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Πίσω
+    </a>
+    <button class="btn btn-sm btn-gold" data-bs-toggle="modal" data-bs-target="#importModal">
+      <i class="bi bi-upload me-1"></i>Εισαγωγή Κινήσεων
+    </button>
+  </div>
+</div>
+
+{# ── Στατιστικά ── #}
+<div class="row g-2 mb-3">
+  <div class="col-6 col-md-3">
+    <a href="{{ url_for('cash.transactions', id=acc.id) }}" class="text-decoration-none">
+      <div class="card card-dark text-center p-2 {% if not status_filter %}border-warning{% endif %}">
+        <div class="fs-4 fw-bold">{{ stats.total }}</div>
+        <div class="small text-muted">Σύνολο</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="{{ url_for('cash.transactions', id=acc.id, status='unmatched') }}" class="text-decoration-none">
+      <div class="card card-dark text-center p-2 {% if status_filter=='unmatched' %}border-warning{% endif %}">
+        <div class="fs-4 fw-bold text-warning">{{ stats.unmatched }}</div>
+        <div class="small text-muted">Αταύτιστα</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="{{ url_for('cash.transactions', id=acc.id, status='matched') }}" class="text-decoration-none">
+      <div class="card card-dark text-center p-2 {% if status_filter=='matched' %}border-success{% endif %}">
+        <div class="fs-4 fw-bold text-success">{{ stats.matched }}</div>
+        <div class="small text-muted">Ταυτίστηκαν</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="{{ url_for('cash.transactions', id=acc.id, status='flagged') }}" class="text-decoration-none">
+      <div class="card card-dark text-center p-2 {% if status_filter=='flagged' %}border-danger{% endif %}">
+        <div class="fs-4 fw-bold text-danger">{{ stats.flagged }}</div>
+        <div class="small text-muted">Για Έρευνα</div>
+      </div>
+    </a>
+  </div>
+</div>
+
+{# ── Λίστα κινήσεων ── #}
+{% if txns %}
+<div class="card card-dark">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-dark table-hover mb-0 align-middle">
+        <thead>
+          <tr class="border-secondary">
+            <th style="width:105px">Ημ/νία</th>
+            <th>Περιγραφή</th>
+            <th class="text-end" style="width:120px">Ποσό</th>
+            <th style="width:130px">Κατάσταση</th>
+            <th style="width:180px">Αντιστοίχιση</th>
+            <th style="width:130px" class="text-end">Ενέργειες</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for txn in txns %}
+          <tr id="row-{{ txn.id }}" class="border-secondary">
+            {# Ημ/νία #}
+            <td class="small text-muted">{{ txn.transaction_date.strftime('%d/%m/%Y') }}</td>
+
+            {# Περιγραφή #}
+            <td>
+              <i class="bi {{ txn.type_icon }} me-1"></i>
+              <span class="small">{{ txn.description }}</span>
+              {% if txn.flag_reason %}
+                <br><span class="badge bg-danger-subtle text-danger small">
+                  <i class="bi bi-flag-fill me-1"></i>{{ txn.flag_reason }}
+                </span>
+              {% endif %}
+              {% if txn.notes and not txn.flag_reason %}
+                <br><span class="text-muted small">{{ txn.notes }}</span>
+              {% endif %}
+            </td>
+
+            {# Ποσό #}
+            <td class="text-end fw-bold {% if txn.is_credit %}text-success{% else %}text-danger{% endif %}">
+              {% if txn.is_credit %}+{% else %}-{% endif %}{{ '%.2f'|format(txn.abs_amount) }}€
+            </td>
+
+            {# Κατάσταση #}
+            <td>
+              <span class="badge bg-{{ txn.status_color }}" id="badge-{{ txn.id }}">
+                {{ txn.status_label }}
+              </span>
+            </td>
+
+            {# Αντιστοίχιση #}
+            <td id="match-cell-{{ txn.id }}" class="small">
+              {% if txn.matched_invoice %}
+                <a href="{{ url_for('invoices.detail', id=txn.matched_invoice.id) }}" class="text-success text-decoration-none">
+                  <i class="bi bi-receipt me-1"></i>
+                  {{ txn.matched_invoice.invoice_number or ('#' ~ txn.matched_invoice.id) }}
+                </a>
+                <br><span class="text-muted" style="font-size:11px">
+                  {{ txn.matched_invoice.client_name or txn.matched_invoice.supplier_name or '' }}
+                </span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            {# Ενέργειες #}
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                {% if txn.status != 'matched' %}
+                <button class="btn btn-outline-success btn-xs"
+                        title="Εύρεση τιμολογίου"
+                        onclick="openMatchModal({{ txn.id }}, '{{ txn.description|e }}', {{ txn.abs_amount }})">
+                  <i class="bi bi-link-45deg"></i>
+                </button>
+                {% else %}
+                <button class="btn btn-outline-secondary btn-xs"
+                        title="Αφαίρεση αντιστοίχισης"
+                        onclick="unmatch({{ txn.id }})">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+                {% endif %}
+
+                {% if txn.status != 'flagged' %}
+                <button class="btn btn-outline-danger btn-xs"
+                        title="Σήμανση για τράπεζα"
+                        onclick="openFlagModal({{ txn.id }})">
+                  <i class="bi bi-flag"></i>
+                </button>
+                {% endif %}
+
+                {% if txn.status not in ('matched', 'ignored') %}
+                <button class="btn btn-outline-secondary btn-xs"
+                        title="Αγνόηση (γνωστή χρέωση)"
+                        onclick="ignoreTransaction({{ txn.id }}, this)">
+                  <i class="bi bi-eye-slash"></i>
+                </button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+  Δεν βρέθηκαν κινήσεις.
+  {% if not status_filter %}
+    <br><button class="btn btn-sm btn-gold mt-3" data-bs-toggle="modal" data-bs-target="#importModal">
+      <i class="bi bi-upload me-1"></i>Εισαγωγή από αρχείο τράπεζας
+    </button>
+  {% endif %}
+</div>
+{% endif %}
+
+
+{# ══════ MODAL: Εισαγωγή αρχείου ══════ #}
+<div class="modal fade" id="importModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-upload me-2 text-warning"></i>Εισαγωγή Κινήσεων</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('cash.import_transactions', id=acc.id) }}" enctype="multipart/form-data">
+        <div class="modal-body">
+          <div class="alert alert-secondary small">
+            <i class="bi bi-info-circle me-1"></i>
+            Κατέβασε αρχείο CSV ή Excel από την web banking της τράπεζάς σου.
+            <strong>Η πρώτη γραμμή πρέπει να είναι επικεφαλίδες</strong> (π.χ. Ημερομηνία, Αιτιολογία, Χρέωση, Πίστωση).
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Αρχείο (.csv ή .xlsx)</label>
+            <input type="file" name="bank_file" accept=".csv,.xlsx,.xls"
+                   class="form-control bg-dark text-white border-secondary" required>
+          </div>
+          <div class="small text-muted">
+            <strong>Υποστηριζόμενες τράπεζες:</strong> Πειραιώς, Alpha Bank, Eurobank, Εθνική — οποιοδήποτε αρχείο με επικεφαλίδες.
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Ακύρωση</button>
+          <button type="submit" class="btn btn-gold"><i class="bi bi-upload me-1"></i>Εισαγωγή</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+{# ══════ MODAL: Αντιστοίχιση με τιμολόγιο ══════ #}
+<div class="modal fade" id="matchModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-link-45deg me-2 text-success"></i>Αντιστοίχιση με Τιμολόγιο</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3 p-2 bg-secondary rounded small" id="matchTxnInfo"></div>
+
+        {# Αναζήτηση #}
+        <div class="input-group mb-3">
+          <input type="text" id="invoiceSearch" class="form-control bg-dark text-white border-secondary"
+                 placeholder="Αναζήτηση με αριθμό, πελάτη, ποσό…">
+          <button class="btn btn-outline-secondary" onclick="searchInvoices()">
+            <i class="bi bi-search"></i>
+          </button>
+        </div>
+
+        <div id="invoiceSuggestions">
+          <div class="text-muted small text-center py-3">
+            <i class="bi bi-arrow-up-circle me-1"></i>Προτάσεις αντιστοίχισης φόρτωση…
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <label class="form-label small text-muted">Σημειώσεις (προαιρετικό)</label>
+          <input type="text" id="matchNotes" class="form-control form-control-sm bg-dark text-white border-secondary"
+                 placeholder="π.χ. Μερική εξόφληση τιμολογίου">
+        </div>
+      </div>
+      <div class="modal-footer border-secondary">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Κλείσιμο</button>
+        <button class="btn btn-success" id="confirmMatchBtn" disabled onclick="confirmMatch()">
+          <i class="bi bi-check-lg me-1"></i>Αντιστοίχιση
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+{# ══════ MODAL: Flag για τράπεζα ══════ #}
+<div class="modal fade" id="flagModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-flag-fill me-2 text-danger"></i>Σήμανση για Επικοινωνία</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted">Σήμανε αυτή την κίνηση για να επικοινωνήσεις με την τράπεζα.</p>
+        <div class="mb-3">
+          <label class="form-label">Λόγος / Σημειώσεις</label>
+          <textarea id="flagReason" class="form-control bg-dark text-white border-secondary" rows="3"
+                    placeholder="π.χ. Δεν αναγνωρίζω αυτή τη χρέωση, Λανθασμένο ποσό χρεώθηκε…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer border-secondary">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Ακύρωση</button>
+        <button class="btn btn-danger" onclick="confirmFlag()">
+          <i class="bi bi-flag me-1"></i>Σήμανση
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+var currentTxnId   = null;
+var selectedInvId  = null;
+
+// ── Αντιστοίχιση ──────────────────────────────────────────────────────────
+
+function openMatchModal(txnId, desc, amount) {
+  currentTxnId  = txnId;
+  selectedInvId = null;
+  document.getElementById('confirmMatchBtn').disabled = true;
+  document.getElementById('matchTxnInfo').innerHTML =
+    '<i class="bi bi-arrow-right me-1"></i><strong>' + desc + '</strong> — ' + amount.toFixed(2) + '€';
+  document.getElementById('invoiceSearch').value = '';
+  new bootstrap.Modal(document.getElementById('matchModal')).show();
+  loadSuggestions(txnId);
+}
+
+function loadSuggestions(txnId) {
+  document.getElementById('invoiceSuggestions').innerHTML =
+    '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-warning"></div></div>';
+  fetch('/cash/transaction/' + txnId + '/suggest')
+    .then(r => r.json()).then(renderInvoiceList);
+}
+
+function searchInvoices() {
+  var q = document.getElementById('invoiceSearch').value.toLowerCase();
+  if (!q) { loadSuggestions(currentTxnId); return; }
+  fetch('/cash/transaction/' + currentTxnId + '/suggest')
+    .then(r => r.json())
+    .then(function(data) {
+      var filtered = data.filter(function(inv) {
+        return (inv.number + inv.client + inv.amount.toString()).toLowerCase().includes(q);
+      });
+      renderInvoiceList(filtered.length ? filtered : data);
+    });
+}
+
+function renderInvoiceList(invoices) {
+  var el = document.getElementById('invoiceSuggestions');
+  if (!invoices.length) {
+    el.innerHTML = '<div class="text-muted small text-center py-3">Δεν βρέθηκαν τιμολόγια.</div>';
+    return;
+  }
+  var html = '<div class="list-group">';
+  invoices.forEach(function(inv) {
+    var statusBadge = inv.status === 'paid' ? '<span class="badge bg-success ms-1">Πληρ.</span>' :
+                      inv.status === 'pending' ? '<span class="badge bg-warning ms-1">Εκκρεμεί</span>' : '';
+    html += '<button type="button" class="list-group-item list-group-item-action bg-dark text-white border-secondary" ' +
+            'onclick="selectInvoice(' + inv.id + ', this)">' +
+            '<div class="d-flex justify-content-between">' +
+            '<span><strong>' + inv.number + '</strong> ' + statusBadge + ' <span class="text-muted ms-2">' + inv.client + '</span></span>' +
+            '<span class="fw-bold">' + inv.amount.toFixed(2) + '€</span>' +
+            '</div>' +
+            '<div class="small text-muted">' + inv.date + '</div>' +
+            '</button>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function selectInvoice(invId, btn) {
+  selectedInvId = invId;
+  document.querySelectorAll('#invoiceSuggestions .list-group-item').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  btn.classList.add('active');
+  document.getElementById('confirmMatchBtn').disabled = false;
+}
+
+function confirmMatch() {
+  if (!selectedInvId) return;
+  var notes = document.getElementById('matchNotes').value;
+  var body  = new FormData();
+  body.append('invoice_id', selectedInvId);
+  body.append('notes', notes);
+  fetch('/cash/transaction/' + currentTxnId + '/match', {method:'POST', body:body})
+    .then(r => r.json()).then(function(data) {
+      if (data.ok) {
+        updateRow(currentTxnId, 'matched', 'Ταυτίστηκε', 'success', data.label);
+        bootstrap.Modal.getInstance(document.getElementById('matchModal')).hide();
+      } else { alert(data.error); }
+    });
+}
+
+function unmatch(txnId) {
+  if (!confirm('Αφαίρεση αντιστοίχισης;')) return;
+  fetch('/cash/transaction/' + txnId + '/unmatch', {method:'POST', body: new FormData()})
+    .then(r => r.json()).then(function(data) {
+      if (data.ok) updateRow(txnId, 'unmatched', 'Αταύτιστο', 'warning', null);
+    });
+}
+
+// ── Flag ──────────────────────────────────────────────────────────────────
+
+function openFlagModal(txnId) {
+  currentTxnId = txnId;
+  document.getElementById('flagReason').value = '';
+  new bootstrap.Modal(document.getElementById('flagModal')).show();
+}
+
+function confirmFlag() {
+  var reason = document.getElementById('flagReason').value.trim();
+  var body = new FormData();
+  body.append('flag_reason', reason);
+  fetch('/cash/transaction/' + currentTxnId + '/flag', {method:'POST', body:body})
+    .then(r => r.json()).then(function(data) {
+      if (data.ok) {
+        updateRow(currentTxnId, 'flagged', 'Για Έρευνα', 'danger', null);
+        bootstrap.Modal.getInstance(document.getElementById('flagModal')).hide();
+      }
+    });
+}
+
+// ── Ignore ────────────────────────────────────────────────────────────────
+
+function ignoreTransaction(txnId, btn) {
+  if (!confirm('Αγνόηση αυτής της κίνησης;')) return;
+  fetch('/cash/transaction/' + txnId + '/ignore', {method:'POST', body: new FormData()})
+    .then(r => r.json()).then(function(data) {
+      if (data.ok) updateRow(txnId, 'ignored', 'Αγνοήθηκε', 'secondary', null);
+    });
+}
+
+// ── DOM update helper ─────────────────────────────────────────────────────
+
+function updateRow(txnId, status, label, color, matchLabel) {
+  var badge = document.getElementById('badge-' + txnId);
+  if (badge) {
+    badge.className = 'badge bg-' + color;
+    badge.textContent = label;
+  }
+  if (matchLabel !== undefined) {
+    var cell = document.getElementById('match-cell-' + txnId);
+    if (cell) cell.innerHTML = matchLabel
+      ? '<span class="text-success small"><i class="bi bi-receipt me-1"></i>' + matchLabel + '</span>'
+      : '<span class="text-muted">—</span>';
+  }
+}
+
+// Enter key on invoice search
+document.getElementById('invoiceSearch').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); searchInvoices(); }
+});
+</script>
+{% endblock %}

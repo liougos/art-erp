@@ -756,6 +756,67 @@ class BankAccount(db.Model):
         return round(float(self.last_actual_balance) - self.calculated_balance, 2)
 
 
+# ── ΤΡΑΠΕΖΙΚΕΣ ΚΙΝΗΣΕΙΣ (BANK RECONCILIATION) ────────────────────────────────
+class BankTransaction(db.Model):
+    """Εισαγμένη τραπεζική κίνηση από αρχείο τράπεζας (CSV/Excel)."""
+    __tablename__ = 'bank_transactions'
+
+    id               = db.Column(db.Integer, primary_key=True)
+    account_id       = db.Column(db.Integer, db.ForeignKey('bank_accounts.id'), nullable=False)
+    transaction_date = db.Column(db.Date, nullable=False)
+    value_date       = db.Column(db.Date)
+    description      = db.Column(db.String(500), nullable=False)
+    # positive = πίστωση (είσπραξη), negative = χρέωση (πληρωμή)
+    amount           = db.Column(db.Numeric(12, 2), nullable=False)
+    transaction_type = db.Column(db.String(30), default='other')
+    # credit | debit | card | fee | transfer | other
+    reference        = db.Column(db.String(200))   # αριθμός παραστατικού τράπεζας
+    status           = db.Column(db.String(20), default='unmatched')
+    # unmatched | matched | flagged | ignored
+    matched_invoice_id = db.Column(db.Integer, db.ForeignKey('invoices.id'))
+    flag_reason      = db.Column(db.String(500))   # λόγος σήμανσης για τράπεζα
+    notes            = db.Column(db.String(500))   # σημειώσεις χρήστη
+    import_batch     = db.Column(db.String(200))   # όνομα αρχείου + timestamp εισαγωγής
+    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
+
+    account         = db.relationship('BankAccount',
+                                      backref=db.backref('bank_transactions', lazy='dynamic'))
+    matched_invoice = db.relationship('Invoice', foreign_keys=[matched_invoice_id])
+
+    @property
+    def is_credit(self):
+        return float(self.amount or 0) > 0
+
+    @property
+    def abs_amount(self):
+        return abs(float(self.amount or 0))
+
+    @property
+    def status_color(self):
+        return {'unmatched': 'warning', 'matched': 'success',
+                'flagged': 'danger', 'ignored': 'secondary'}.get(self.status, 'secondary')
+
+    @property
+    def status_label(self):
+        return {'unmatched': 'Αταύτιστο', 'matched': 'Ταυτίστηκε',
+                'flagged': 'Για Έρευνα', 'ignored': 'Αγνοήθηκε'}.get(self.status, self.status)
+
+    @property
+    def type_label(self):
+        return {'credit': 'Πίστωση', 'debit': 'Χρέωση', 'card': 'Κάρτα',
+                'fee': 'Χρέωση Τρ/ζας', 'transfer': 'Μεταφορά',
+                'other': 'Άλλο'}.get(self.transaction_type, self.transaction_type)
+
+    @property
+    def type_icon(self):
+        return {'credit': 'bi-arrow-down-circle-fill text-success',
+                'debit':  'bi-arrow-up-circle-fill text-danger',
+                'card':   'bi-credit-card-fill text-warning',
+                'fee':    'bi-bank text-secondary',
+                'transfer': 'bi-arrow-left-right text-info',
+                'other':  'bi-circle text-muted'}.get(self.transaction_type, 'bi-circle text-muted')
+
+
 # ── LEAVE REQUESTS (ΑΙΤΗΣΕΙΣ ΑΔΕΙΑΣ) ────────────────────────────────────────
 class LeaveRequest(db.Model):
     __tablename__ = 'leave_requests'
