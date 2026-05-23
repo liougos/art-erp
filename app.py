@@ -120,20 +120,19 @@ def create_app(config_class=Config):
 
 
 def _run_migrations():
-    """Add columns introduced after initial DB creation (SQLite safe)."""
+    """Add columns introduced after initial DB creation (PostgreSQL + SQLite safe)."""
     from sqlalchemy import text
     migrations = [
         "ALTER TABLE employees ADD COLUMN annual_leave_days INTEGER DEFAULT 20",
         "ALTER TABLE employees ADD COLUMN contract_file_path VARCHAR(600)",
         "ALTER TABLE employees ADD COLUMN contract_file_name VARCHAR(400)",
     ]
-    with db.engine.connect() as conn:
-        for sql in migrations:
-            try:
+    for sql in migrations:
+        try:
+            with db.engine.begin() as conn:   # own transaction per statement
                 conn.execute(text(sql))
-                conn.commit()
-            except Exception:
-                pass  # column already exists
+        except Exception:
+            pass  # column already exists — safe to ignore
 
 
 def _create_default_admin():
