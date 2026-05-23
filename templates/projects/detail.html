@@ -27,6 +27,33 @@
       <i class="bi bi-graph-up me-1"></i>P&amp;L
     </a>
     <a href="{{ url_for('projects.edit', id=project.id) }}" class="btn btn-outline-secondary"><i class="bi bi-pencil me-1"></i>Επεξεργασία</a>
+    {% if current_user.role in ('admin', 'manager') %}
+    <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteProjectModal">
+      <i class="bi bi-trash"></i>
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Modal Διαγραφής Έργου ── #}
+<div class="modal fade" id="deleteProjectModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Διαγραφή Έργου</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Είσαι σίγουρος ότι θέλεις να διαγράψεις το έργο <strong>{{ project.code }} — {{ project.title }}</strong>;</p>
+        <p class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>Η ενέργεια είναι μη αναστρέψιμη.</p>
+      </div>
+      <div class="modal-footer border-secondary">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Ακύρωση</button>
+        <form method="POST" action="{{ url_for('projects.delete', id=project.id) }}" class="d-inline">
+          <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Διαγραφή</button>
+        </form>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -211,7 +238,7 @@
         <span><i class="bi bi-receipt"></i> Τιμολόγια Έργου</span>
         <a href="{{ url_for('invoices.upload') }}?project_id={{ project.id }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus"></i> Τιμολόγιο</a>
       </div>
-      {% if invoices.all()|length > 0 %}
+      {% if invoices|length > 0 %}
       <div class="table-responsive">
         <table class="table table-sm mb-0">
           <thead><tr><th>Αρ.</th><th>Εκδότης</th><th>Ημ.</th><th>Ποσό</th><th>Κατηγορία</th><th>Κατάσταση</th></tr></thead>

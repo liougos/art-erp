@@ -184,10 +184,6 @@
     fetch('/invoices/extract', { method: 'POST', body: fd })
       .then(r => r.json())
       .then(data => {
-        if (data.error) {
-          aiStatus.innerHTML = '<i class="bi bi-exclamation-triangle text-warning me-1"></i>Δεν εντοπίστηκαν στοιχεία — συμπληρώστε χειροκίνητα.';
-          return;
-        }
         const fill = (sel, val) => { const el = document.querySelector(sel); if (el && val !== undefined && val !== null && val !== '') el.value = val; };
         fill('[name=invoice_number]', data.invoice_number);
         fill('[name=invoice_date]',   data.invoice_date);
@@ -205,10 +201,17 @@
           sel.dispatchEvent(new Event('change'));
         }
         if (data.invoice_type === 'income') document.getElementById('typeIncome').checked = true;
-        aiStatus.innerHTML = '<i class="bi bi-check-circle text-success me-1"></i><strong>Στοιχεία εξήχθηκαν επιτυχώς</strong> — ελέγξτε πριν αποθηκεύσετε.';
+
+        const hasData = data.issuer || data.invoice_number || data.amount_net;
+        if (hasData) {
+          aiStatus.innerHTML = '<i class="bi bi-check-circle text-success me-1"></i><strong>Στοιχεία εξήχθηκαν</strong> — ελέγξτε και διορθώστε αν χρειαστεί.';
+        } else {
+          aiStatus.innerHTML = '<i class="bi bi-pencil text-muted me-1"></i>Δεν εντοπίστηκαν αυτόματα στοιχεία — συμπληρώστε χειροκίνητα.';
+        }
       })
       .catch(() => {
-        aiStatus.innerHTML = '<i class="bi bi-wifi-off text-muted me-1"></i>AI extraction απέτυχε — συμπληρώστε χειροκίνητα.';
+        // Network error — soft message, user can still fill manually
+        aiStatus.innerHTML = '<i class="bi bi-pencil text-muted me-1"></i>Συμπληρώστε τα στοιχεία χειροκίνητα.';
       });
   }
 

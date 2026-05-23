@@ -337,49 +337,98 @@ _AI_PROMPT = """Ανάλυσε αυτό το ελληνικό τιμολόγιο
 Χρησιμοποίησε τελεία ως δεκαδικό (όχι κόμμα). Αν δεν βρεις κάτι βάλε κενή string ή 0."""
 
 
+_EMPTY_EXTRACTION = {
+    'invoice_number': '', 'invoice_date': '', 'issuer': '', 'issuer_afm': '',
+    'amount_net': 0, 'vat_rate': 24, 'vat_amount': 0, 'total_amount': 0,
+    'invoice_type': 'expense', '_partial': True,
+}
+
+
 @invoices_bp.route('/extract', methods=['POST'])
 @login_required
 def extract():
+    """
+    AI extraction — NEVER returns a non-200 or hard error.
+    On any failure returns _EMPTY_EXTRACTION so the user can fill manually.
+    """
     file = request.files.get('file')
     if not file or not file.filename:
-        return jsonify({'error': 'Δεν βρέθηκε αρχείο'}), 400
+        return jsonify(_EMPTY_EXTRACTION)
+
+    # Check API key up front — fail gracefully, not with 500
+    api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+    if not api_key:
+        logger.warning('ANTHROPIC_API_KEY not set — returning empty extraction')
+        return jsonify(dict(_EMPTY_EXTRACTION, _reason='no_api_key'))
+
     ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+
     try:
         import anthropic
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(api_key=api_key)
+
         if ext == 'pdf':
             data = file.read()
-            with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
-                tmp.write(data)
-                tmp_path = tmp.name
-            from pypdf import PdfReader
-            reader = PdfReader(tmp_path)
-            text = '\n'.join(p.extract_text() or '' for p in reader.pages[:10])
-            os.unlink(tmp_path)
-            msg = client.messages.create(
-                model='claude-sonnet-4-6', max_tokens=1024,
-                messages=[{'role': 'user', 'content': f'{_AI_PROMPT}\n\nΚείμενο τιμολογίου:\n{text[:8000]}'}]
-            )
+            # First try text extraction (fast, free)
+            text = ''
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
+                    tmp.write(data)
+                    tmp_path = tmp.name
+                from pypdf import PdfReader
+                reader = PdfReader(tmp_path)
+                text = '\n'.join(p.extract_text() or '' for p in reader.pages[:10])
+                os.unlink(tmp_path)
+            except Exception as pdf_err:
+                logger.debug('PDF text extraction failed: %s', pdf_err)
+
+            if text.strip():
+                msg = client.messages.create(
+                    model='claude-opus-4-5', max_tokens=1024,
+                    messages=[{'role': 'user', 'content': f'{_AI_PROMPT}\n\nΚείμενο τιμολογίου:\n{text[:8000]}'}]
+                )
+            else:
+                # PDF has no extractable text (scanned) → use vision via base64
+                b64 = base64.standard_b64encode(data).decode()
+                msg = client.messages.create(
+                    model='claude-opus-4-5', max_tokens=1024,
+                    messages=[{'role': 'user', 'content': [
+                        {'type': 'document', 'source': {'type': 'base64', 'media_type': 'application/pdf', 'data': b64}},
+                        {'type': 'text', 'text': _AI_PROMPT}
+                    ]}]
+                )
         else:
             data = file.read()
             b64 = base64.standard_b64encode(data).decode()
             mt = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
                   'gif': 'image/gif', 'webp': 'image/webp', 'heic': 'image/heic'}.get(ext, 'image/jpeg')
             msg = client.messages.create(
-                model='claude-sonnet-4-6', max_tokens=1024,
+                model='claude-opus-4-5', max_tokens=1024,
                 messages=[{'role': 'user', 'content': [
                     {'type': 'image', 'source': {'type': 'base64', 'media_type': mt, 'data': b64}},
                     {'type': 'text', 'text': _AI_PROMPT}
                 ]}]
             )
+
         raw = msg.content[0].text.strip()
-        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        # Try to parse JSON — handle markdown code blocks too
+        raw_clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw, flags=re.MULTILINE).strip()
+        match = re.search(r'\{.*\}', raw_clean, re.DOTALL)
         if match:
-            return jsonify(json.loads(match.group()))
-        return jsonify({'error': 'Δεν βρέθηκαν στοιχεία στο τιμολόγιο'})
+            result = json.loads(match.group())
+            # Ensure all expected keys exist
+            for k, v in _EMPTY_EXTRACTION.items():
+                result.setdefault(k, v)
+            return jsonify(result)
+
+        # AI responded but no JSON found — return empty
+        logger.warning('AI extraction: no JSON in response: %s', raw[:200])
+        return jsonify(_EMPTY_EXTRACTION)
+
     except Exception as e:
-        logger.error(f'Invoice extraction error: {e}')
-        return jsonify({'error': str(e)}), 500
+        logger.error('Invoice extraction error: %s', e)
+        # Always 200 — frontend handles partial gracefully
+        return jsonify(dict(_EMPTY_EXTRACTION, _reason=str(e)[:120]))
 
 
 # ── ACCOUNTANT LIST IMPORT ──────────────────────────────────────────────────

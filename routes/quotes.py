@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from datetime import datetime, date
-from models import db, Quote, QuoteItem, Tender, Project
+from models import db, Quote, QuoteItem, Tender, Project, BankAccount
 
 quotes_bp = Blueprint('quotes', __name__)
 
@@ -21,8 +21,9 @@ def index():
 @quotes_bp.route('/new', methods=['GET', 'POST'])
 @login_required
 def new():
-    tenders  = Tender.query.order_by(Tender.title).all()
-    projects = Project.query.filter(Project.status.in_(['active','planning'])).order_by(Project.code).all()
+    tenders       = Tender.query.order_by(Tender.title).all()
+    projects      = Project.query.filter(Project.status.in_(['active','planning'])).order_by(Project.code).all()
+    bank_accounts = BankAccount.query.filter_by(is_active=True).order_by(BankAccount.name).all()
     if request.method == 'POST':
         quote = Quote(
             title=request.form['title'].strip(),
@@ -66,7 +67,8 @@ def new():
         db.session.commit()
         flash(f'Προσφορά "{quote.title}" δημιουργήθηκε.', 'success')
         return redirect(url_for('quotes.detail', id=quote.id))
-    return render_template('quotes/new.html', tenders=tenders, projects=projects, today=date.today())
+    return render_template('quotes/new.html', tenders=tenders, projects=projects,
+                           bank_accounts=bank_accounts, today=date.today())
 
 
 @quotes_bp.route('/<int:id>')

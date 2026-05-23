@@ -118,6 +118,20 @@ def edit(id):
     return render_template('projects/edit.html', project=p, users=users)
 
 
+@projects_bp.route('/<int:id>/delete', methods=['POST'])
+@login_required
+def delete(id):
+    if current_user.role not in ('admin', 'manager'):
+        flash('Δεν έχετε δικαίωμα διαγραφής έργου.', 'danger')
+        return redirect(url_for('projects.detail', id=id))
+    p = Project.query.get_or_404(id)
+    title = p.title
+    db.session.delete(p)
+    db.session.commit()
+    flash(f'Το έργο "{title}" διαγράφηκε.', 'success')
+    return redirect(url_for('projects.index'))
+
+
 # ── Phases ────────────────────────────────────────────────────────────────
 @projects_bp.route('/<int:id>/phases/add', methods=['POST'])
 @login_required

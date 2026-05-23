@@ -71,16 +71,31 @@
       </div>
 
       <div class="card card-dark">
-        <div class="card-header border-secondary"><h6 class="mb-0">Όροι &amp; Σημειώσεις</h6></div>
+        <div class="card-header border-secondary">
+          <h6 class="mb-0">Όροι &amp; Σημειώσεις</h6>
+        </div>
         <div class="card-body">
           <div class="mb-3">
-            <label class="form-label">Όροι Προσφοράς</label>
-            <textarea name="terms" class="form-control bg-dark text-white border-secondary" rows="3"
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label mb-0">Όροι Προσφοράς</label>
+              <div class="d-flex gap-1">
+                <button type="button" class="btn btn-xs btn-outline-warning" style="font-size:11px;padding:1px 6px"
+                        onclick="fillPrivateTerms()">Ιδιώτης</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary" style="font-size:11px;padding:1px 6px"
+                        onclick="document.getElementById('terms').value=''">✕</button>
+              </div>
+            </div>
+            <textarea id="terms" name="terms" class="form-control bg-dark text-white border-secondary" rows="4"
                       placeholder="π.χ. Πληρωμή εντός 30 ημερών..."></textarea>
           </div>
           <div class="mb-3">
-            <label class="form-label">Σημειώσεις</label>
-            <textarea name="notes" class="form-control bg-dark text-white border-secondary" rows="3"></textarea>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label mb-0">Σημειώσεις</label>
+              <button type="button" class="btn btn-xs btn-outline-warning" style="font-size:11px;padding:1px 6px"
+                      onclick="fillIBANs()">+ IBANs</button>
+            </div>
+            <textarea id="notes" name="notes" class="form-control bg-dark text-white border-secondary" rows="3"
+                      placeholder="Τραπεζικοί λογαριασμοί, οδηγίες παράδοσης…"></textarea>
           </div>
         </div>
       </div>
@@ -155,6 +170,56 @@
 
 {% block scripts %}
 <script>
+// ── Auto-fill: Όροι Ιδιώτη ──────────────────────────────────────────────────
+const PRIVATE_TERMS = `Η παρούσα προσφορά ισχύει για τριάντα (30) ημερολογιακές ημέρες από την ημερομηνία έκδοσής της.
+
+Τρόπος πληρωμής: 30% προκαταβολή κατά την υπογραφή της σύμβασης, 40% κατά την έναρξη των εργασιών και 30% κατά την παράδοση του έργου.
+
+Οι τιμές περιλαμβάνουν ΦΠΑ 24%. Οι εργασίες θα εκτελεστούν σύμφωνα με τους κανόνες τέχνης και τις ισχύουσες προδιαγραφές συντήρησης.
+
+Τυχόν πρόσθετες εργασίες που δεν περιλαμβάνονται στην παρούσα προσφορά θα εκτελεστούν μόνον κατόπιν γραπτής συμφωνίας.`;
+
+function fillPrivateTerms() {
+  document.getElementById('terms').value = PRIVATE_TERMS;
+}
+
+// ── Auto-fill: IBANs τραπεζών ────────────────────────────────────────────────
+const BANK_ACCOUNTS = [
+  {% for acc in bank_accounts %}
+  { name: {{ acc.name|tojson }}, bank: {{ (acc.bank_name or '')|tojson }}, iban: {{ (acc.iban or acc.account_number or '')|tojson }} },
+  {% endfor %}
+];
+
+function fillIBANs() {
+  if (!BANK_ACCOUNTS.length) {
+    alert('Δεν υπάρχουν καταχωρημένοι τραπεζικοί λογαριασμοί.');
+    return;
+  }
+  var lines = ['Τραπεζικοί Λογαριασμοί για κατάθεση:'];
+  BANK_ACCOUNTS.forEach(function(a) {
+    if (a.iban) {
+      lines.push((a.bank ? a.bank + ' — ' : '') + a.name + ': ' + a.iban);
+    }
+  });
+  var el = document.getElementById('notes');
+  el.value = el.value ? el.value + '\n\n' + lines.join('\n') : lines.join('\n');
+}
+
+// ── Auto-fill: όταν γεμίσει το ΑΦΜ (αν ξεκινά με 9 = δημόσιο, αλλιώς ιδιώτης)
+document.querySelector('[name=client_afm]').addEventListener('blur', function() {
+  const afm = this.value.trim();
+  const termsEl = document.getElementById('terms');
+  const notesEl = document.getElementById('notes');
+  if (!afm) return;
+  const isPublic = afm.startsWith('9');   // ΑΦΜ δημοσίου ξεκινά πάντα με 9
+  if (!isPublic && !termsEl.value) {
+    fillPrivateTerms();
+  }
+  if (!notesEl.value && BANK_ACCOUNTS.length) {
+    fillIBANs();
+  }
+});
+
 const rowTemplate = `
   <tr class="item-row">
     <td><input type="text" name="item_description[]" class="form-control form-control-sm bg-dark text-white border-secondary" required></td>

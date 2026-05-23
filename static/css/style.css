@@ -38,6 +38,8 @@
   /* Breadcrumb */
   --bs-breadcrumb-divider-color: rgba(255,255,255,.3);
   --bs-breadcrumb-item-active-color: #fff;
+  /* text-muted fix: Bootstrap uses --bs-secondary-color which defaults to dark */
+  --bs-secondary-color: rgba(180, 180, 180, 0.85);
 }
 
 /* ── Variables ──────────────────────────────────────────────────────────── */
